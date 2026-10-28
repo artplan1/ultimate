@@ -41,6 +41,8 @@ import { Branch, Branched, LineageApi, Rooted, Roots } from './api.ts'
 import { ConversationsApi, Trees } from '../conversations/api.ts'
 import { Standing, Started } from '../subagents/api.ts'
 import { spawn } from 'node:child_process'
+import { stat } from 'node:fs/promises'
+import { resolve as resolvePath } from 'node:path'
 import { CompactAction, ForgetAction, OpenEditorAction, RecentAction, TallyDoc } from './refs.ts'
 import {
   applyMemoryOps,
@@ -664,6 +666,8 @@ type PromptInput = {
   /** One short line naming the branch until its summary renames it; without it, the prompt's first 80 characters. */
   title?: string
   images?: BranchImage[]
+  /** Existing folder the branch owns; relative paths resolve from the project root. */
+  cwd?: string
   isolated?: boolean
   model?: ModelRef
   thinkingLevel?: ModelThinkingLevel
@@ -696,11 +700,11 @@ export const BranchReceipts = defineDoc<{ branches: Record<string, number> }>({
   initial: () => ({ branches: {} }),
 })
 
-/** The project checkout's tip, where new branches start, shared or isolated. */
-function head(host: ExtensionHost) {
+/** The owning checkout's tip, where new branches start, shared or isolated. */
+function head(host: ExtensionHost, cwd: string) {
   return host
     .need(WorkspacesApi)
-    .git(host.projectRoot, 'rev-parse', 'HEAD')
+    .git(cwd, 'rev-parse', 'HEAD')
     .catch(
       // A project without a Git HEAD can start conversations without a commit baseline.
       () => undefined,
@@ -736,8 +740,15 @@ function branchedText(branch: number, from: number, at: number, intent: string, 
  */
 export async function startBranch(host: ExtensionHost, input: BranchInput, ctx: Context) {
   if (!input.prompt.trim()) throw new Error('A branch needs a prompt')
+  const cwd = resolvePath(host.projectRoot, input.cwd ?? host.projectRoot)
+  const folder = await stat(cwd).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!folder?.isDirectory()) throw new Error(`Branch cwd is not an existing folder: ${cwd}`)
+  input = { ...input, cwd }
   const from = input.from as ConversationId
-  const main = await head(host)
+  const main = await head(host, cwd)
   const roots = await rootsOf(host, ctx)
   // A first branch needs a stored entry to fork from. An empty root becomes a tally at that entry: its history builds
   // up from branches and landings, while branches start from its memory.
@@ -802,7 +813,7 @@ async function forkBranch(
       ? undefined
       : hostDefaultModel(host))
   await configure(tx, fork.id, {
-    cwd: host.projectRoot,
+    cwd: input.cwd ?? host.projectRoot,
     ...(model ? { model } : {}),
     ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
   })
@@ -810,7 +821,8 @@ async function forkBranch(
   const agent = await tx.doc(AgentDoc, fork.id)
   delete agent.tools
   delete agent.modelTools
-  if (input.isolated) await host.need(WorkspacesApi).create(tx, fork.id, host.projectRoot)
+  if (input.isolated)
+    await host.need(WorkspacesApi).create(tx, fork.id, input.cwd ?? host.projectRoot)
   if (main) await seedSeen(tx, fork.id, main, Date.now())
   // The branch knows its tally as far as its context reaches; its own prompt node, appended below, is no news to it.
   if (tally !== undefined) (await tx.doc(Seen, fork.id)).tally = tally

@@ -1,7 +1,6 @@
 /** The `branch` tool: start a lineage branch and send it its first message. */
 import { Type } from '@earendil-works/pi-ai'
 import { configure, defineTool, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
-import type { ConversationId } from '@earendil-works/pi-durable'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { definitionAgent, discoverAgents, hostDefaultModel } from '../../lib/agents.ts'
 import { LineageApi, Roots } from '../lineage/api.ts'
@@ -20,6 +19,13 @@ export const branchTool = (host: ExtensionHost) =>
       prompt: Type.String({ minLength: 1 }),
       title: Type.Optional(Type.String({ minLength: 1, maxLength: 60 })),
       root: Type.Optional(Type.Number()),
+      cwd: Type.Optional(
+        Type.String({
+          minLength: 1,
+          description:
+            'Existing folder the branch owns; relative paths resolve from the project root. Defaults to the project root.',
+        }),
+      ),
       isolated: Type.Optional(Type.Boolean()),
       images: Type.Optional(imagesParameter),
     }),
@@ -47,14 +53,12 @@ export const branchTool = (host: ExtensionHost) =>
         )
         const coordinator = definitions.find((definition) => definition.name === 'coordinator')
         if (!coordinator) throw new Error('Missing coordinator definition')
-        // The model and thinking level the definition pins when its provider has a login here, thinking clamped to
-        // what the model supports; without one, the current default model, never the one the root last stored.
-        const rootAgent = await (await host
-          .harness()
-          .conversation(root as ConversationId, ctx))!.agent(ctx)
+        // An explicit coordinator pin wins; otherwise the branch follows the initiating agent's current model and
+        // thinking level, never the root's stale configuration.
+        const initiatingAgent = await (await host.harness().conversation(from, ctx))!.agent(ctx)
         const { model, thinkingLevel, modelTools } = definitionAgent(
           coordinator,
-          { ...rootAgent, model: hostDefaultModel(host) },
+          { ...initiatingAgent, model: initiatingAgent.model ?? hostDefaultModel(host) },
           host.modelRuntime,
         )
         const branch = await lineage.branch(
@@ -62,6 +66,7 @@ export const branchTool = (host: ExtensionHost) =>
             from: root,
             prompt: input.prompt,
             ...(input.title ? { title: input.title } : {}),
+            ...(input.cwd ? { cwd: input.cwd } : {}),
             isolated: input.isolated ?? true,
             deliver: false,
             by: from,

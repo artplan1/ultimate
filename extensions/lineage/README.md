@@ -4,10 +4,11 @@ The UI calls a root's tally its **context** ("what every new branch starts from"
 document, tools and model-facing text, where agents and stored entries already use it.
 
 - **Branch** (`LineageApi.branch`
-  `{ from, at?, prompt, title?, images?, isolated?, model?, thinkingLevel?, deliver?, by?, receipt? }` → `{ id }`; there
+  `{ from, at?, prompt, title?, images?, cwd?, isolated?, model?, thinkingLevel?, deliver?, by?, receipt? }` → `{ id }`; there
   is no action: agents start branches with the messages extension's `branch` tool, whose reply-enabled first message
   returns the branch's answer). It forks the source at `at` (default: its latest entry) as an
-  ownerless conversation in the project root, optionally isolated in its own worktree. It inherits the source context
+  ownerless conversation in `cwd` (an existing folder, relative to the project root when not absolute; the project
+  root by default), optionally isolated in that folder's repository worktree. It inherits the source context
   (or, from a root with memories, starts at a memory brief: see Project memory), then the durable `lineage.prompt` task submits the prompt and images as its first
   input. Doc `lineage.branch` holds `{ from, at, intent }`; `inputAt` is when the branch was asked for, not inherited
   activity. The fork happens before the tree root receives a model-visible `lineage.branched` node
@@ -191,7 +192,7 @@ non-root conversations in a tree (undefined for roots, owned conversations and o
 `abstract(tx, id, { text, at, title?, feature? })` opens or updates `id`'s abstract in that root in the caller's
 transaction, before its first table write because it reads conversation records; it is a no-op wherever `branchOf`
 is undefined. The conversations summarizer uses this to publish an abstract after each completed exchange.
-`branch({ from, prompt, at?, isolated?, model?, thinkingLevel?, deliver?, by?, receipt? }, ctx)` starts a normal lineage branch.
+`branch({ from, prompt, at?, cwd?, isolated?, model?, thinkingLevel?, deliver?, by?, receipt? }, ctx)` starts a normal lineage branch.
 An optional `receipt: { taskId, callId }` records the branch id atomically with the fork in the originating task's
 `lineage.branch-receipts` document. Repeating that task and call returns the same branch; Pi retires the receipt when
 the task completes. The method returns `{ id }`. With `deliver: false`, no `lineage.prompt` task is created: the caller

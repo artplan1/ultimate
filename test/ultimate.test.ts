@@ -254,6 +254,7 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
   expect(coordinator.tools).toBeUndefined()
   expect(coordinator.model).toBeUndefined()
   expect(configured.instructions).toBe(coordinator.instructions)
+  expect(configured.cwd).toBe(f.root)
   expect(configured.model).toEqual({ provider: 'faux', modelId: 'faux-think' })
   expect(configured.thinkingLevel).toBe('high')
   expect(configured.tools.map((tool) => tool.name)).toContain('debug')
@@ -265,8 +266,8 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
     (tx) => configure(tx, branch, { modelTools: { add: [agentBranch] } }),
     context,
   )
-  // A user definition without a pin: the branch starts on the default model, never on a root model that lost its
-  // login (rog, 2026-10-25: branches inherited the root's OpenRouter model after its login was removed).
+  // A user definition without a pin: the nested branch follows its initiating branch, never the root model that
+  // lost its login (rog, 2026-10-25: branches inherited the root's OpenRouter model after its login was removed).
   await f.server.harness.commit(
     (tx) =>
       configure(tx, ROOT_CONVERSATION_ID, { model: { provider: 'openrouter', modelId: dead } }),
@@ -277,7 +278,13 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
     join(f.home, '.ultimate/agents/coordinator.md'),
     '---\nname: coordinator\ndescription: Custom coordinator\n---\nUse the project procedure.',
   )
-  await ask(f.server, branch, 'BRANCH ' + JSON.stringify({ prompt: 'Same tree', isolated: false }))
+  const client = join(f.root, 'ara-client')
+  await mkdir(client)
+  await ask(
+    f.server,
+    branch,
+    'BRANCH ' + JSON.stringify({ prompt: 'Same tree', cwd: 'ara-client', isolated: false }),
+  )
   await until(async () => (await log(f.server)).some((m) => m.text === 'Same tree'))
   const sameTree = (await log(f.server)).find((m) => m.text === 'Same tree')!
   expect(
@@ -288,9 +295,9 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
     context,
   ))!.agent(context)
   expect(overridden.instructions).toBe('Use the project procedure.')
-  const rootAgent = await f.server.root.agent(context)
-  expect(overridden.model).toEqual({ provider: 'faux', modelId: 'faux-1' })
-  expect(overridden.thinkingLevel).toBe(rootAgent.thinkingLevel)
+  expect(overridden.cwd).toBe(client)
+  expect(overridden.model).toEqual(configured.model)
+  expect(overridden.thinkingLevel).toBe(configured.thinkingLevel)
   expect(overridden.tools.map((tool) => tool.name)).toEqual(
     configured.tools.map((tool) => tool.name).filter((name) => name !== 'debug'),
   )

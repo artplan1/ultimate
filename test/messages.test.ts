@@ -348,6 +348,55 @@ it('wakes an idle recipient and returns one typed reply; one-way messages return
   ])
   expect(JSON.stringify(sent)).not.toContain('One way')
 })
+it('returns a shared answer once while settling every read request, including after reopen', async () => {
+  const g = gate()
+  const f = await fixture(g)
+  await f.send(String(f.recipient.id), 'HOLD')
+  await until(f.holding)
+  await f.send(String(f.recipient.id), 'Shared answer')
+  f.hold.release()
+  await until(async () =>
+    (await f.log())!.messages.filter((m) => m.reply).every((m) => m.state === 'answered'),
+  )
+  const asked = (await f.log())!.messages.filter((m) => m.reply)
+  expect(asked).toHaveLength(2)
+  expect(asked[0].answer).toBeDefined()
+  expect(asked[1].answer).toBe(asked[0].answer)
+  await f.opened.close()
+  await f.open()
+  g.release()
+  await until(async () => (await replies(f)).length > 0)
+  await f.opened.root.waitForIdle(context)
+  expect(await replies(f)).toHaveLength(1)
+  expect((await f.log())!.messages.filter((m) => m.re !== undefined)).toHaveLength(1)
+  // Equal text from a new assistant entry is a new answer, not a duplicate.
+  await f.send(String(f.recipient.id), 'Shared answer')
+  await until(async () => (await replies(f)).length === 2)
+  const responses = (await f.log())!.messages.filter((m) => m.re !== undefined)
+  expect(responses[1].text).toBe(responses[0].text)
+  expect(responses[1].answer).not.toBe(responses[0].answer)
+})
+it('an explicit answer settles read siblings but leaves a queued follow-up to get its own answer', async () => {
+  const f = await fixture()
+  await f.send(String(f.recipient.id), 'HOLD')
+  await until(f.holding)
+  await f.send(String(f.recipient.id), 'SEND ' + JSON.stringify({ to: '#1', text: 'Ready' }))
+  await f.send(String(f.recipient.id), 'Genuine follow-up', { steer: false })
+  f.hold.release()
+  await until(async () => (await replies(f)).length >= 2)
+  await f.recipient.waitForIdle(context)
+  await f.opened.root.waitForIdle(context)
+  const log = (await f.log())!.messages
+  expect(log.filter((m) => m.reply).map((m) => m.state)).toEqual([
+    'answered',
+    'answered',
+    'answered',
+  ])
+  expect((await replies(f)).map((e) => e.data)).toEqual([
+    expect.objectContaining({ text: 'Ready', failed: false }),
+    expect.objectContaining({ text: expect.stringContaining('Genuine follow-up'), failed: false }),
+  ])
+})
 it('records a one-way input answer without returning it to the sender', async () => {
   const f = await fixture()
   await f.send(String(f.recipient.id), 'One-way update', { reply: false })

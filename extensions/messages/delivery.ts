@@ -4,6 +4,7 @@ import { awaitWithContext } from '@earendil-works/chord/context'
 import {
   AssistantEntry,
   InboxDoc,
+  defineDoc,
   defineTask,
   ROOT_CONVERSATION_ID,
 } from '@earendil-works/pi-durable'
@@ -16,6 +17,18 @@ import type { Message } from './api.ts'
 import { imagesOf } from '../../lib/entries.ts'
 import { append, terminal } from './log.ts'
 import { remoteLabel } from './addresses.ts'
+
+// The answer and recipient identify delivery, not the request that happened to observe it.
+// Keep receipts outside the bounded message log so late observers and reopened tasks still find them.
+const Answers = defineDoc<{ ids: Record<string, number> }>({
+  kind: 'board.answers',
+  checkpointWhen: () => false,
+  version: 1,
+  scope: 'conversation',
+  history: 'latest',
+  fork: 'initial',
+  initial: () => ({ ids: {} }),
+})
 
 export function delivery(host: ExtensionHost) {
   const refresh = async (id: number, ctx: Context) => {
@@ -211,6 +224,11 @@ export function delivery(host: ExtensionHost) {
             if (error !== undefined) original.error = error
             if ('entry' in settled && settled.entry !== undefined) original.entry = settled.entry
           }
+          // Each submission settles above, but a run may settle several with the same assistant entry.
+          // Remote requests have separate return addresses (keys), even when their local sender is 'remote'.
+          const key = JSON.stringify([answer, m.from, m.remote ?? null])
+          const answers = await tx.doc(Answers, recipient.id)
+          if (answer !== undefined && answers.ids[key] !== undefined) return terminal
           const response = await append(tx, {
             from: m.to,
             to: m.from,
@@ -222,6 +240,7 @@ export function delivery(host: ExtensionHost) {
             ...(error ? { error } : {}),
             ...(m.remote ? { remote: m.remote } : {}),
           })
+          if (answer !== undefined) answers.ids[key] = response.id
           return {
             status: 'running',
             checkpoint: {

@@ -129,9 +129,19 @@ export async function send(
     if (from !== 'user' && input.reply !== false) {
       const log = await tx.doc(Messages, ROOT_CONVERSATION_ID)
       // Only a message the agent has read is owed; one still queued is unread and gets its own turn.
-      const pending = log.messages.find(
-        (m) => m.to === from && m.from === to && m.reply && m.state === 'delivered',
-      )
+      const owed = []
+      for (const m of log.messages) {
+        if (m.to !== from || m.from !== to || !m.reply) continue
+        if (to === 'user') {
+          if (m.state === 'delivered') owed.push(m)
+        } else if (m.state === 'sent' || m.state === 'delivered') {
+          const submission = await tx.submissionByRequest(from as ConversationId, `board:${m.id}`)
+          // Placement, not delivery-task scheduling, says what this run has read. A settled run's
+          // unanswered input must still report its failure, even if its delivery task has not caught up.
+          if (submission?.status === 'placed') owed.push(m)
+        }
+      }
+      const pending = owed[0]
       // A message to the user who is owed an answer is that answer, with its questions and images.
       if (pending && to === 'user') {
         pending.state = 'answered'
@@ -140,7 +150,9 @@ export async function send(
       // An agent messaging a sender whose message it has read and owes an answer is answering: this becomes the reply,
       // and that message's delivery, seeing it answered, keeps the final answer local.
       else if (pending) {
-        pending.state = 'answered'
+        // The explicit answer ends this run, so it answers every read request from this sender.
+        // Unread, queued messages remain sent and get their own turn and answer.
+        for (const message of owed) message.state = 'answered'
         const response = await append(tx, {
           from,
           to,

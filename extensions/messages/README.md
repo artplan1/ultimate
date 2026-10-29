@@ -27,7 +27,8 @@ field records `steer` or `followUp`.
 The answer returns as `board.reply`, steering the sender. An unanswered input produces a failure reply instead.
 Answer directly rather than messaging the sender. A reply-enabled agent message back to a sender whose
 reply-enabled message the agent has received and not answered becomes that answer: in one commit `send()` marks the
-original `answered`, appends the reply (`re`, `reply: false`, its `images`, its `call`) and starts the delivery task
+read requests from that sender `answered`, appends one reply (`re` naming the oldest request, `reply: false`, its
+`images`, its `call`) and starts the delivery task
 in its reply phase; its `steer` and `reply` flags are ignored. The original's delivery then sees it answered and keeps
 the final answer local, and the tool returns `Sent as your answer to message N.` with `terminate`, so the run ends
 without restating it. A replayed call finds the reply through the `board.sent` receipt and memo, so it is sent once.
@@ -107,7 +108,11 @@ The message tool is replay-safe: it memoizes the sent id. A task-scoped `board.s
 message and delivery task, preventing a duplicate even if interrupted before the memo is saved.
 Delivery is a background durable task owned by the root conversation. Stable request ids (`board:<id>` and
 `board-reply:<reply-id>`) deduplicate submissions across reopen. Recording the answer, appending its reply and
-advancing the task checkpoint happen in one transaction. A reopened task resumes that checkpoint, so both a
+advancing the task checkpoint happen in one transaction. When several inputs settle with the same assistant entry,
+each request records its own settlement, but a conversation-scoped `board.answers` receipt admits only one reply
+per answer entry and recipient. These receipts outlive the bounded log and survive reopen; equal text in a different
+assistant entry is a new answer. Remote requests retain their separate return keys. Failures without an answer
+entry remain per request. A reopened task resumes that checkpoint, so both a
 placed input awaiting an answer and a recorded answer awaiting delivery survive without duplicate replies.
 One-way input deliveries also wait for the answer; recording it and completing the task commit together.
 Note deliveries complete after placement, without waiting for an answer.

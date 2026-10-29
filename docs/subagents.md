@@ -12,3 +12,40 @@ Definitions live in `agents/`, `~/.ultimate/agents/`, and the project root's `.u
 Review goes through one `reviewer`. When any `reviewer-*` definition exists, the shipped reviewer leads them: it starts
 every one in parallel and returns one merged verdict; otherwise it reviews alone. Add a reviewer by adding a
 `reviewer-<name>.md`; here `.ultimate/agents/` has three.
+
+### Reviewing uncommitted changes
+
+An immutable `base..head` range remains the default. Missing a range does not select working-tree review. When a
+separate review context is justified and pre-review commits are not authorized, request the alternative explicitly:
+
+```text
+Review mode: working-tree
+Repository cwd: /absolute/path/to/my-app
+Expected HEAD: <full commit SHA>
+Snapshot scope: <explicit files, including relevant untracked files, or bounded paths to enumerate>
+Acceptance criteria: <observable requirements>
+```
+
+The reviewer verifies cwd and HEAD and captures a read-only snapshot before inspection and again immediately before
+its verdict. Its identity includes the scoped changed file list (tracked and untracked), staged and unstaged diffs
+(disable external diff and text conversion), and SHA-256 digests of the changed files' contents, with deletions,
+executable modes and symlink targets recorded. Do not follow symlinks outside scope. Use existing Git and digest
+tools, not a saved copy, temporary project or new harness. Both staged and unstaged changes and untracked contents
+must be reviewed. Do not scan unrelated files, secrets (`.env`, credentials), dependency trees or generated output;
+if excluded material is necessary to judge the change, verification is blocked rather than silently incomplete.
+
+A different HEAD, scoped file list, diff or content at the final capture invalidates the review: return
+NEEDS CHANGES with verification blocked, not approval of the old or replacement snapshot. Matching captures cannot
+detect intervening edits that were reverted; report that limit. Unchanged files may be read for context, so the
+identity is not a frozen copy of all dependencies or the whole repository.
+
+The report uses the existing verdict/findings format, replacing `Reviewed range` with `Reviewed working tree`:
+absolute cwd, actual HEAD, snapshot identity (digest method and hashes), reviewed paths including untracked files,
+exclusions and verification limits. No edits, formatters, mutation-capable tests, staging, commits or pushes are
+permitted. This mode grants no delivery authority.
+
+A team lead passes the explicit request and snapshot contract to every leaf, checks that each reviewed the same
+identity at start and end, and rechecks it before merging verdicts. A leaf that rejects the mode or omits snapshot
+evidence blocks verification. Custom `reviewer-*` definitions must explicitly support this contract; forwarding a
+request does not override an immutable-range-only definition. Check discovery for user/project replacements before
+assuming a built-in prompt change applies. Definitions reload on next use; no server restart is needed.

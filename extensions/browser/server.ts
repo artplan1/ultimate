@@ -12,6 +12,12 @@ export async function browserBinary() {
   const cache = join(homedir(), '.cache/ms-playwright')
   const candidates = [
     process.env.ULTIMATE_CHROMIUM,
+    ...(process.platform === 'darwin'
+      ? ['/Applications', join(homedir(), 'Applications')].flatMap((directory) => [
+          join(directory, 'Google Chrome.app/Contents/MacOS/Google Chrome'),
+          join(directory, 'Chromium.app/Contents/MacOS/Chromium'),
+        ])
+      : []),
     '/usr/bin/chromium',
     '/usr/bin/google-chrome-stable',
     ...(await readdir(cache).catch(() => []))
@@ -29,7 +35,7 @@ export async function browserBinary() {
     }
   }
   throw new Error(
-    'No Chromium found. Set ULTIMATE_CHROMIUM or install /usr/bin/chromium, /usr/bin/google-chrome-stable, or ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome.',
+    'No Chromium found. Set ULTIMATE_CHROMIUM or install Google Chrome or Chromium in /Applications or ~/Applications on macOS; on Linux install /usr/bin/chromium, /usr/bin/google-chrome-stable, or ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome.',
   )
 }
 

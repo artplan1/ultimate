@@ -2,7 +2,7 @@
   "modelFamilies": {
     "families": {
       "lead": { "model": "openai-codex/gpt-6.1-sol", "thinking": "high", "color": "orange" },
-      "review": { "model": "openai-codex/gpt-6-astra", "thinking": "high" },
+      "review": { "model": "openai-codex/gpt-6.1-sol", "thinking": "high" },
       "fast": { "model": "openai-codex/gpt-6.1-sol" }
     },
     "assign": {

@@ -1,7 +1,6 @@
 ---
 name: worker
 family: fast
-fast: true
 isolate: worktree
 denyTools: [instance]
 description: Implement one bounded task, verify it, and report evidence in one focused commit.

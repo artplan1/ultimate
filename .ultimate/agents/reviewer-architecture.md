@@ -3,7 +3,6 @@ name: reviewer-architecture
 description: Advisory architecture review (Sol 6.1, fast); asks whether a range uses Ultimate's own architecture instead of building beside it. Never blocks.
 family: fast
 thinking: low
-fast: true
 tools: [read, bash]
 ---
 

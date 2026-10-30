@@ -2,7 +2,6 @@
 name: dream-pass
 description: Runs one read-only pass of a dream (memory, failures, tools, corrections, codify or project) and reports findings with evidence.
 family: fast
-fast: true
 tools: [read, bash, codemode, memory]
 ---
 

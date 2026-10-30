@@ -1,6 +1,7 @@
 ---
 name: reviewer
 description: Read-only review of a commit range or explicit working-tree snapshot; leads every reviewer-* definition when the project has a team.
+family: review
 tools: [read, bash, subagent]
 ---
 

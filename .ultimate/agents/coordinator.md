@@ -1,6 +1,6 @@
 ---
 name: coordinator
-addTools: []
 description: Coordinates one feature for @ultimate (Claude Code Opus 5.5, high thinking)
-thinking: high
+family: lead
+addTools: []
 ---

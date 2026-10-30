@@ -38,7 +38,7 @@ it('falls back from a default summary model without a login, and says so once', 
   const status = await summaryModelStatus(host)
   expect(status).toMatchObject({
     model: { provider: 'openrouter', id: 'anthropic/claude-haiku-5.5' },
-    configured: 'openai-codex/gpt-6-luna:medium',
+    configured: 'openai-codex/gpt-6-luna:low',
     fellBack: true,
   })
   await summaryModelStatus(host)
@@ -104,7 +104,7 @@ async function checkHost(options: { logins: string[]; secrets?: string[] }) {
     need: () => ({
       summaryModelStatus: async () => ({
         model: { provider: 'openrouter', id: 'haiku', thinking: 'medium' },
-        configured: 'openai-codex/gpt-6-luna:medium',
+        configured: 'openai-codex/gpt-6-luna:low',
         source: 'default',
         fellBack: true,
       }),
@@ -141,6 +141,29 @@ it('keeps the other areas when one throws synchronously', async () => {
   })
   expect(issues.find((issue) => issue.area === 'Summary model')?.status).toBe('warn')
   expect(issues.some((issue) => issue.summary === 'one check failed: boom')).toBe(true)
+})
+
+it("lets a provider's configured auth stand in for the secret that names it", async () => {
+  const host = await checkHost({ logins: ['openrouter', 'typesafe'] })
+  const secrets = [
+    { name: 'TYPESAFE_API_KEY', description: '', provider: 'typesafe' },
+    { name: 'OTHER_API_KEY', description: '', provider: 'other' },
+  ]
+  const issues = await check({
+    ...host,
+    extensions: () =>
+      [
+        {
+          name: 'classify',
+          enabled: true,
+          server: { tools: [], sections: [], hooks: 0, docs: [], secrets },
+        },
+      ] as never,
+  })
+  expect(issues.find((issue) => issue.area === 'Secrets')).toMatchObject({
+    status: 'warn',
+    summary: 'OTHER_API_KEY missing',
+  })
 })
 
 it('names each file that replaces a built-in definition whole, but not an overlay', async () => {

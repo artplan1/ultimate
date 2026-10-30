@@ -53,12 +53,12 @@ export const branchTool = (host: ExtensionHost) =>
         )
         const coordinator = definitions.find((definition) => definition.name === 'coordinator')
         if (!coordinator) throw new Error('Missing coordinator definition')
-        // An explicit coordinator pin wins; otherwise the branch follows the initiating agent's current model and
+        // A configured coordinator model or family wins; otherwise the branch follows the initiating agent's current model and
         // thinking level, never the root's stale configuration.
         const initiatingAgent = await (await host.harness().conversation(from, ctx))!.agent(ctx)
         const { model, thinkingLevel, modelTools } = definitionAgent(
           coordinator,
-          { ...initiatingAgent, model: initiatingAgent.model ?? hostDefaultModel(host) },
+          { ...initiatingAgent, model: initiatingAgent.model ?? (await hostDefaultModel(host)) },
           host.modelRuntime,
         )
         const branch = await lineage.branch(

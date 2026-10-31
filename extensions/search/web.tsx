@@ -59,7 +59,9 @@ function Search({ call }: { call: ToolCallView }) {
         ) : (
           <div className="max-h-96 overflow-auto font-mono text-xs">
             {groups.size === 0 && (
-              <div className="px-2.5 py-2 text-muted-foreground">No matches</div>
+              <div className="px-2.5 py-2 whitespace-pre-wrap text-muted-foreground">
+                {call.output || 'No matches'}
+              </div>
             )}
             {[...groups].map(([path, items]) => (
               <div key={path} className="border-b border-border/50 last:border-b-0">

@@ -149,6 +149,12 @@ it('filters content by the native glob listing', async () => {
 
   // The same glob lists files on its own, so it keeps its native meaning outside a content search too.
   expect((await run({ glob: 'a dir/*.ts' })).details.items).toEqual([{ path: 'a dir/file one.ts' }])
+  expect((await run({ query: 'file', glob: 'a dir/*.ts' })).details.items).toEqual([
+    { path: 'a dir/file one.ts' },
+  ])
+  expect((await run({ query: 'runner', glob: 'runner?.ts' })).details.items).toEqual([
+    { path: 'runner3.ts' },
+  ])
   const empty = await run({ glob: 'src/*.md', pattern: 'hello' })
   expect(empty.details).toEqual({ kind: 'content', items: [], total: 0, more: 0 })
   expect(empty.text).toBe('No matches.')
@@ -161,17 +167,12 @@ it('rejects requests the native engine cannot answer honestly', async () => {
     'either query (find files by path) or pattern',
   )
   await expect(run({})).rejects.toThrow('Pass query (fuzzy path search)')
-  await expect(run({ query: 'a', context: 1 })).rejects.toThrow(
-    'mode and context apply to content search',
-  )
-  await expect(run({ mode: 'plain' })).rejects.toThrow('mode and context apply to content search')
-  await expect(run({ pattern: 'a.b', mode: 'regex' })).rejects.toThrow(
-    'no raw regular-expression search',
-  )
+  await expect(run({ query: 'a', context: 1 })).rejects.toThrow('context applies to content search')
   await expect(run({ pattern: 'a\nb' })).rejects.toThrow('cannot contain a newline')
-  await expect(run({ query: 'a', glob: 'a dir/*.ts' })).rejects.toThrow('contains whitespace')
-  await expect(run({ query: 'a', glob: '!runner*' })).rejects.toThrow('an exclusion')
-  await expect(run({ query: 'a', glob: 'package.json' })).rejects.toThrow('has no wildcard')
+  const literalHint = await run({ pattern: 'hello|goodbye' })
+  expect(literalHint.text).toBe(
+    'No matches.\nSearch matches literal text; use bash rg for a regex.',
+  )
 })
 
 it('bounds file items by limit', async () => {

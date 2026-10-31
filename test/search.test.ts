@@ -31,7 +31,7 @@ async function fixture() {
     const prepared = tool.prepareArguments ? tool.prepareArguments(args) : args
     let detail: SearchResult | undefined
     const result = await tool.execute(
-      prepared as never,
+      prepared,
       {
         env: new NodeExecutionEnv({ cwd }),
         details: async (value: SearchResult) => void (detail = value),

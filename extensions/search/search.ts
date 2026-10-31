@@ -112,7 +112,6 @@ export function createIndex() {
       if (scanned.ok && scanned.value) return
       // A later call may try again; this one fails rather than searching a partial index.
       if (indexes.get(cwd) === index) indexes.delete(cwd)
-      finder.destroy()
       index.failed = scanned.ok
         ? `Indexing ${cwd} did not finish within ${SCAN_MS / 1000} s`
         : `Indexing ${cwd} failed: ${scanned.error}`

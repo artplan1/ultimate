@@ -1,5 +1,5 @@
 import { Type } from '@earendil-works/pi-ai'
-import { defineExtension, defineTool } from '@earendil-works/pi-durable'
+import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { createIndex, DEFAULT_CONTEXT, DEFAULT_LIMIT, MAX_CONTEXT, MAX_LIMIT } from './search.ts'
 import type { SearchResult } from './types.ts'
@@ -40,6 +40,13 @@ export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoo
   host.onClose(async () => index.dispose())
   return defineExtension({
     name: 'search',
+    sections: [
+      section(
+        'search',
+        () =>
+          'Use search for project file discovery and content search instead of bash rg, grep, find or ls. Use query for fuzzy file paths, pattern for content, or glob alone to list files; narrow with glob and read the matching files for full context. Search is read-only and returns bounded results; content counts with more matches are lower bounds.',
+      ),
+    ],
     tools: [
       defineTool({
         name: 'search',

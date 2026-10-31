@@ -1,5 +1,10 @@
 import { FileFinder } from '@ff-labs/fff-node'
-import type { GrepResult, Result, SearchResult as FileSearchResult } from '@ff-labs/fff-node'
+import type {
+  GrepCursor,
+  GrepMatch,
+  Result,
+  SearchResult as FileSearchResult,
+} from '@ff-labs/fff-node'
 import type { SearchResult } from './types.ts'
 
 /** How long an index nobody is searching stays before its native finder is released. */
@@ -21,10 +26,10 @@ export type SearchRequest = {
   limit?: number
 }
 
-/** What one validated request runs: a glob listing, a fuzzy path search, or a content search. */
+/** What one validated request runs: a glob listing, a fuzzy path search, or a literal content search. */
 type Plan =
   | { kind: 'files'; call: 'glob' | 'query'; term: string; limit: number }
-  | { kind: 'content'; term: string; limit: number; mode: 'plain' | 'regex'; context: number }
+  | { kind: 'content'; pattern: string; glob?: string; limit: number; context: number }
 
 /** One indexed working directory; `using` counts the calls holding it, so none is released underneath another. */
 type Index = {
@@ -35,8 +40,35 @@ type Index = {
   idle?: ReturnType<typeof setTimeout>
 }
 
+/**
+ * The native file search takes its glob as a constraint word inside the query string, so only a wildcard glob
+ * survives that parse: a wildcard-free glob becomes fuzzy text, whitespace splits it into terms, `!` is an exclusion
+ * and a leading backslash an escape.
+ */
+function fileTerm(query: string, glob: string): string {
+  // A lone `*` matches every file, and dropping it filters exactly the same files.
+  if (glob === '*') return query
+  if (/\s/.test(glob))
+    throw new Error(
+      `glob "${glob}" contains whitespace, which the native file search splits into separate terms. Pass it as glob on its own to match these files.`,
+    )
+  if (glob.startsWith('!') || glob.startsWith('\\'))
+    throw new Error(
+      `glob "${glob}" starts with ${glob.startsWith('!') ? 'an exclusion' : 'an escape'} for the native file search. Pass it as glob on its own to match these files.`,
+    )
+  if (!/[*?[{]/.test(glob))
+    throw new Error(
+      `glob "${glob}" has no wildcard, so the native file search would read it as query text. Add a wildcard, or pass the path as glob on its own.`,
+    )
+  return `${glob} ${query}`
+}
+
 function plan(request: SearchRequest): Plan {
   const { query, pattern, glob } = request
+  if (request.mode !== undefined && request.mode !== 'plain')
+    throw new Error(
+      'Contents are matched as literal text: this native index has no raw regular-expression search, so regex mode is unavailable. Search the text plainly, or use bash rg for a regex.',
+    )
   if (query !== undefined && pattern !== undefined)
     throw new Error(
       'Pass either query (find files by path) or pattern (search file contents), not both.',
@@ -44,17 +76,21 @@ function plan(request: SearchRequest): Plan {
   if (pattern === undefined && (request.mode !== undefined || request.context !== undefined))
     throw new Error('mode and context apply to content search; pass pattern to use them.')
   const limit = Math.min(request.limit ?? DEFAULT_LIMIT, MAX_LIMIT)
-  // The native search takes a glob as a constraint word in the same string, usable before or after the term.
-  if (pattern !== undefined)
+  if (pattern !== undefined) {
+    if (pattern.includes('\n'))
+      throw new Error(
+        'A content pattern cannot contain a newline: the native matcher searches line by line.',
+      )
     return {
       kind: 'content',
-      term: glob ? `${glob} ${pattern}` : pattern,
+      pattern,
+      ...(glob ? { glob } : {}),
       limit,
-      mode: request.mode ?? 'plain',
       context: Math.min(request.context ?? DEFAULT_CONTEXT, MAX_CONTEXT),
     }
+  }
   if (query !== undefined)
-    return { kind: 'files', call: 'query', term: glob ? `${glob} ${query}` : query, limit }
+    return { kind: 'files', call: 'query', term: glob ? fileTerm(query, glob) : query, limit }
   if (glob === undefined)
     throw new Error(
       'Pass query (fuzzy path search), pattern (content search) or glob (file filter or listing).',
@@ -62,7 +98,7 @@ function plan(request: SearchRequest): Plan {
   return { kind: 'files', call: 'glob', term: glob, limit }
 }
 
-function files(result: Result<FileSearchResult>, limit: number): SearchResult {
+function found(result: Result<FileSearchResult>, limit: number): SearchResult {
   if (!result.ok) throw new Error(`Search failed: ${result.error}`)
   const items = result.value.items.slice(0, limit).map((item) => ({ path: item.relativePath }))
   return {
@@ -73,25 +109,59 @@ function files(result: Result<FileSearchResult>, limit: number): SearchResult {
   }
 }
 
-function content(result: Result<GrepResult>, limit: number): SearchResult {
-  if (!result.ok) throw new Error(`Search failed: ${result.error}`)
-  // A regex the engine cannot compile falls back to literal matching; report the error instead of a quiet wrong search.
-  if (result.value.regexFallbackError)
-    throw new Error(`Invalid regular expression: ${result.value.regexFallbackError}`)
-  const shown = result.value.items.slice(0, limit)
-  const more = result.value.items.length > shown.length || result.value.nextCursor !== null
-  return {
-    kind: 'content',
-    items: shown.map((match) => ({
-      path: match.relativePath,
-      line: match.lineNumber,
-      text: match.lineContent,
-      ...(match.contextBefore?.length ? { before: match.contextBefore } : {}),
-      ...(match.contextAfter?.length ? { after: match.contextAfter } : {}),
-    })),
-    total: shown.length,
-    more: more ? 1 : 0,
+/** The paths a glob matches, as the glob listing itself reports them, to filter a content search by. */
+function matchingPaths(finder: FileFinder, glob: string): Set<string> {
+  const paths = new Set<string>()
+  const first = finder.glob(glob, { pageSize: 1000 })
+  if (!first.ok) throw new Error(`Search failed: ${first.error}`)
+  for (const item of first.value.items) paths.add(item.relativePath)
+  if (paths.size < first.value.totalMatched) {
+    // The index knows the exact count, so one full-size page collects the rest.
+    const rest = finder.glob(glob, { pageSize: first.value.totalMatched })
+    if (!rest.ok) throw new Error(`Search failed: ${rest.error}`)
+    for (const item of rest.value.items) paths.add(item.relativePath)
   }
+  return paths
+}
+
+/**
+ * Content matches for a literal pattern, with the glob applied here: the native query parser would read a `?` glob
+ * as search text. The native page is a soft target filled by whole chunks of files, so one match past `limit` proves
+ * more exist rather than trusting its cursor, which only says files are unscanned.
+ */
+function matches(
+  finder: FileFinder,
+  wanted: Extract<Plan, { kind: 'content' }>,
+  paths?: Set<string>,
+): SearchResult {
+  const shown: GrepMatch[] = []
+  let cursor: GrepCursor | null = null
+  while (shown.length <= wanted.limit) {
+    const page = finder.multiGrep({
+      patterns: [wanted.pattern],
+      pageSize: wanted.limit + 1,
+      maxMatchesPerFile: wanted.limit + 1,
+      beforeContext: wanted.context,
+      afterContext: wanted.context,
+      cursor,
+    })
+    if (!page.ok) throw new Error(`Search failed: ${page.error}`)
+    for (const match of page.value.items) {
+      if (paths && !paths.has(match.relativePath)) continue
+      shown.push(match)
+      if (shown.length > wanted.limit) break
+    }
+    if (shown.length > wanted.limit || page.value.nextCursor === null) break
+    cursor = page.value.nextCursor
+  }
+  const items = shown.slice(0, wanted.limit).map((match) => ({
+    path: match.relativePath,
+    line: match.lineNumber,
+    text: match.lineContent,
+    ...(match.contextBefore?.length ? { before: match.contextBefore } : {}),
+    ...(match.contextAfter?.length ? { after: match.contextAfter } : {}),
+  }))
+  return { kind: 'content', items, total: items.length, more: shown.length > items.length ? 1 : 0 }
 }
 
 /**
@@ -138,7 +208,13 @@ export function createIndex() {
   function release(cwd: string, index: Index) {
     index.using--
     if (index.using > 0) return
-    // A failed scan or an unloaded extension drops at once; a cached index waits out its idle time.
+    if (index.failed) {
+      // Its first scan may still run natively, where destroying it now would be premature; free it after an idle wait.
+      index.idle ??= setTimeout(() => index.finder.destroy(), IDLE_MS)
+      index.idle.unref?.()
+      return
+    }
+    // An index that left the cache (a failed scan) or a closing extension drops at once; a cached one idles first.
     if (closed || indexes.get(cwd) !== index) {
       drop(cwd, index)
       return
@@ -159,20 +235,13 @@ export function createIndex() {
         await index.ready
         if (index.failed) throw new Error(index.failed)
         const { finder } = index
-        if (wanted.kind === 'content')
-          return content(
-            finder.grep(wanted.term, {
-              mode: wanted.mode,
-              pageSize: wanted.limit,
-              // One match past the limit proves more exist: the page fills per file, and a file capped at exactly the
-              // limit would look complete.
-              maxMatchesPerFile: wanted.limit + 1,
-              beforeContext: wanted.context,
-              afterContext: wanted.context,
-            }),
-            wanted.limit,
-          )
-        return files(
+        if (wanted.kind === 'content') {
+          const paths = wanted.glob === undefined ? undefined : matchingPaths(finder, wanted.glob)
+          // A glob that matches no file leaves nothing to search.
+          if (paths?.size === 0) return { kind: 'content', items: [], total: 0, more: 0 }
+          return matches(finder, wanted, paths)
+        }
+        return found(
           wanted.call === 'glob'
             ? finder.glob(wanted.term, { pageSize: wanted.limit })
             : finder.fileSearch(wanted.term, { pageSize: wanted.limit }),

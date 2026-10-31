@@ -52,7 +52,7 @@ export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoo
         name: 'search',
         // Every search only reads the index and writes no frecency or history database, so a rerun cannot do harm.
         replay: 'safe',
-        description: `Search files and the text inside them from a native index of the conversation's working directory. Prefer it over bash rg, grep, find or ls: query finds files by fuzzy path, pattern searches contents, glob filters either or lists files on its own, and one call returns relative paths, line numbers and context. The index follows file changes, so new files show up without a rescan. Read-only: it changes nothing in the project. limit defaults to ${DEFAULT_LIMIT} items (max ${MAX_LIMIT}) and context to ${DEFAULT_CONTEXT} lines (max ${MAX_CONTEXT}).`,
+        description: `Search files and the text inside them from a native index of the conversation's working directory. Prefer it over bash rg, grep, find or ls: query finds files by fuzzy path, pattern searches contents as literal text, glob filters either or lists files on its own, and one call returns relative paths, line numbers and context. The index follows file changes, so new files show up without a rescan. Read-only: it changes nothing in the project. limit defaults to ${DEFAULT_LIMIT} items (max ${MAX_LIMIT}) and context to ${DEFAULT_CONTEXT} lines (max ${MAX_CONTEXT}).`,
         parameters: Type.Object({
           query: Type.Optional(
             Type.String({
@@ -65,7 +65,7 @@ export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoo
             Type.String({
               minLength: 1,
               description:
-                'Text, or a regular expression with mode "regex", to search for inside files. Omit to find files instead.',
+                'Literal text to search for inside files, taken exactly as written, spaces and glob characters included. Omit to find files instead.',
             }),
           ),
           glob: Type.Optional(
@@ -76,8 +76,9 @@ export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoo
             }),
           ),
           mode: Type.Optional(
-            Type.Union([Type.Literal('plain'), Type.Literal('regex')], {
-              description: 'How pattern matches: plain text (default) or a regular expression.',
+            Type.Literal('plain', {
+              description:
+                'Contents are matched as literal text: the native index has no raw regular-expression search, so plain is the only mode.',
             }),
           ),
           context: Type.Optional(

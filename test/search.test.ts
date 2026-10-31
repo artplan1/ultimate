@@ -91,19 +91,70 @@ it('finds files by fuzzy path, lists by glob and searches contents with context'
   })
   expect(matches.text).toContain('src/runner.ts:3: export function runWorkflow() {}')
   expect(matches.text).toContain('src/runner.ts:1: import { start } from "./start"')
-
-  const regex = await run({ pattern: 'run\\w+', mode: 'regex' })
-  expect(regex.details.items).toEqual([
-    {
-      path: 'src/runner.ts',
-      line: 3,
-      text: 'export function runWorkflow() {}',
-      before: ['import { start } from "./start"', 'const ready = true'],
-    },
-  ])
 })
 
-it('rejects ambiguous or empty requests', async () => {
+it('searches a literal pattern the native query parser would rewrite', async () => {
+  const { root, run } = await fixture()
+  await mkdir(join(root, 'src'))
+  await writeFile(
+    join(root, 'src', 'notes.ts'),
+    'foo  bar\n*.ts TODO literal\nconst x = arr[0] ? a : b\n',
+  )
+
+  const spaced = await run({ pattern: 'foo  bar', context: 0 })
+  expect(spaced.details.items).toEqual([{ path: 'src/notes.ts', line: 1, text: 'foo  bar' }])
+  // The query parser collapses runs of whitespace, so the single space must match nothing here.
+  expect((await run({ pattern: 'foo bar', context: 0 })).details.items).toEqual([])
+
+  const globChars = await run({ pattern: '*.ts TODO' })
+  expect(globChars.details.items.map((item) => item.line)).toEqual([2])
+  const classes = await run({ pattern: 'arr[0] ?' })
+  expect(classes.details.items.map((item) => item.line)).toEqual([3])
+})
+
+it('filters content by the native glob listing', async () => {
+  const { root, run } = await fixture()
+  await mkdir(join(root, 'src'))
+  await mkdir(join(root, 'a dir'))
+  for (const path of [
+    'src/runner1.ts',
+    'src/runner2.ts',
+    'src/x.ts',
+    'other.md',
+    'a dir/file one.ts',
+    'runner3.ts',
+  ])
+    await writeFile(join(root, path), 'hello world\n')
+
+  // A glob without a slash matches at the top level only, so the nested files need **/.
+  const top = await run({ glob: 'runner?.ts', pattern: 'hello world' })
+  expect(top.details.items).toEqual([{ path: 'runner3.ts', line: 1, text: 'hello world' }])
+  const patterns = await run({ glob: '**/runner?.ts', pattern: 'hello world' })
+  expect(patterns.details.items.map((item) => item.path).toSorted()).toEqual([
+    'runner3.ts',
+    'src/runner1.ts',
+    'src/runner2.ts',
+  ])
+  const classes = await run({ glob: '**/[rx]*.ts', pattern: 'hello' })
+  expect(classes.details.items.map((item) => item.path).toSorted()).toEqual([
+    'runner3.ts',
+    'src/runner1.ts',
+    'src/runner2.ts',
+    'src/x.ts',
+  ])
+  const spaced = await run({ glob: 'a dir/*.ts', pattern: 'hello' })
+  expect(spaced.details.items).toEqual([
+    { path: 'a dir/file one.ts', line: 1, text: 'hello world' },
+  ])
+
+  // The same glob lists files on its own, so it keeps its native meaning outside a content search too.
+  expect((await run({ glob: 'a dir/*.ts' })).details.items).toEqual([{ path: 'a dir/file one.ts' }])
+  const empty = await run({ glob: 'src/*.md', pattern: 'hello' })
+  expect(empty.details).toEqual({ kind: 'content', items: [], total: 0, more: 0 })
+  expect(empty.text).toBe('No matches.')
+})
+
+it('rejects requests the native engine cannot answer honestly', async () => {
   const { root, run } = await fixture()
   await writeFile(join(root, 'a.ts'), 'hello\n')
   await expect(run({ query: 'a', pattern: 'b' })).rejects.toThrow(
@@ -113,36 +164,81 @@ it('rejects ambiguous or empty requests', async () => {
   await expect(run({ query: 'a', context: 1 })).rejects.toThrow(
     'mode and context apply to content search',
   )
-  await expect(run({ glob: '*.ts', mode: 'regex' })).rejects.toThrow(
-    'mode and context apply to content search',
+  await expect(run({ mode: 'plain' })).rejects.toThrow('mode and context apply to content search')
+  await expect(run({ pattern: 'a.b', mode: 'regex' })).rejects.toThrow(
+    'no raw regular-expression search',
   )
-  await expect(run({ pattern: 'a(b', mode: 'regex' })).rejects.toThrow('Invalid regular expression')
+  await expect(run({ pattern: 'a\nb' })).rejects.toThrow('cannot contain a newline')
+  await expect(run({ query: 'a', glob: 'a dir/*.ts' })).rejects.toThrow('contains whitespace')
+  await expect(run({ query: 'a', glob: '!runner*' })).rejects.toThrow('an exclusion')
+  await expect(run({ query: 'a', glob: 'package.json' })).rejects.toThrow('has no wildcard')
 })
 
-it('bounds items by limit and reports how many are left', async () => {
+it('bounds file items by limit', async () => {
   const { root, run } = await fixture()
   await mkdir(join(root, 'many'))
-  for (let index = 0; index < 5; index++) await writeFile(join(root, 'many', `item${index}.ts`), '')
-  // Written before the first search: the tests never wait for the watcher to pick a new file up.
-  await writeFile(
-    join(root, 'many', 'lines.ts'),
-    Array.from({ length: 12 }, (_, index) => `hit ${index}`).join('\n') + '\n',
-  )
+  for (let index = 0; index < 6; index++) await writeFile(join(root, 'many', `item${index}.ts`), '')
   const listed = await run({ glob: 'many/*.ts', limit: 2 })
   expect(listed.details.items).toHaveLength(2)
   expect(listed.details.total).toBe(6)
   expect(listed.details.more).toBe(4)
   expect(listed.text).toContain('Found 6 files, showing 2:')
   expect(listed.text).toContain('4 more files; raise limit or narrow the glob.')
+})
 
-  const matches = await run({ glob: 'many/lines.ts', pattern: 'hit', limit: 3, context: 0 })
+it('caps context and reports only further matches it found', async () => {
+  const { root, run } = await fixture()
+  await mkdir(join(root, 'lines'))
+  await writeFile(
+    join(root, 'lines', 'many.ts'),
+    Array.from({ length: 12 }, (_, index) => `hit ${index}`).join('\n') + '\n',
+  )
+  const matches = await run({ glob: 'lines/*.ts', pattern: 'hit', limit: 3, context: 0 })
   expect(matches.details.items).toHaveLength(3)
   expect(matches.details.total).toBe(3)
   expect(matches.details.more).toBe(1)
   expect(matches.text).toContain('More matches than shown')
 
-  const capped = await run({ glob: 'many/lines.ts', pattern: 'hit 11', context: 99 })
+  const capped = await run({ glob: 'lines/*.ts', pattern: 'hit 11', context: 99 })
   expect(capped.details.items[0].before).toHaveLength(10)
+})
+
+it('does not claim a match the native cursor only implies', async () => {
+  const { root, run } = await fixture()
+  await mkdir(join(root, 'aaa'))
+  await writeFile(join(root, 'aaa', 'aaa.ts'), 'hit one\n')
+  await writeFile(join(root, 'aaa', 'aab.ts'), 'hit two\n')
+  for (let index = 0; index < 400; index++)
+    await writeFile(join(root, 'aaa', `zzz${index}.ts`), 'nothing\n')
+  // Exactly the limit of matches: a page sized to the limit would still report unscanned files, so the count could
+  // only be a guess. The extra row asked for here confirms there is none.
+  const settled = await run({ pattern: 'hit', limit: 2, context: 0 })
+  expect(settled.details.items).toHaveLength(2)
+  expect(settled.details.total).toBe(2)
+  expect(settled.details.more).toBe(0)
+  expect(settled.text).not.toContain('More matches')
+})
+
+it('counts a further match only when the glob keeps it', async () => {
+  const { root, run } = await fixture()
+  await mkdir(join(root, 'keep'))
+  await writeFile(join(root, 'noise.ts'), 'needle\n'.repeat(5))
+  await writeFile(join(root, 'keep', 'a.ts'), 'needle\n'.repeat(2))
+  await writeFile(join(root, 'keep', 'b.ts'), 'needle\n')
+
+  // Five matches from noise.ts fill a native page, but none passes the glob, so nothing is left to report.
+  const kept = await run({ glob: 'keep/a.ts', pattern: 'needle', limit: 2, context: 0 })
+  expect(kept.details.items).toEqual([
+    { path: 'keep/a.ts', line: 1, text: 'needle' },
+    { path: 'keep/a.ts', line: 2, text: 'needle' },
+  ])
+  expect(kept.details.more).toBe(0)
+  expect(kept.text).not.toContain('More matches')
+
+  const more = await run({ glob: 'keep/*.ts', pattern: 'needle', limit: 2 })
+  expect(more.details.items).toHaveLength(2)
+  expect(more.details.more).toBe(1)
+  expect(more.text).toContain('More matches than shown')
 })
 
 it('scans a working directory once and never releases an index another call holds', async () => {

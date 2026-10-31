@@ -1,6 +1,7 @@
 /**
  * What the `search` tool returns as its details, for the transcript renderer. Paths are relative to the searched
- * working directory; a content item also carries its line, the line's text and the context around it.
+ * working directory; a content item also carries its line, the line's text and the context around it. A glob limits
+ * both kinds to matching paths; content matches are literal text.
  */
 export type SearchResult = {
   kind: 'files' | 'content'
@@ -16,13 +17,13 @@ export type SearchResult = {
     after?: string[]
   }>
   /**
-   * How many matches the search found: exact for files; for content, the matches returned, because the native grep
-   * counts only what it returns.
+   * How many matches the search found: exact for files; for content, the matches returned, because the native matcher
+   * counts only what it returns and a full count would mean scanning every file.
    */
   total: number
   /**
-   * Further matches that are not in `items`: exact for files; 1 for content, meaning at least one more, because the
-   * native grep cannot count the rest without scanning everything.
+   * Further matches that are not in `items`: exact for files; for content 1 only when another match was found beyond
+   * the page, so the count is a lower bound rather than a guess from unscanned files.
    */
   more: number
 }

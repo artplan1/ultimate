@@ -104,6 +104,19 @@ Every pass starts from @ultimate's handoff in its brief, then reads with codemod
 `#conversation/entry`, a trace error, a commit or `path:line`. Conversation summaries and abstracts (in the root's
 tally, `ultimate.entries(<root>)`) are the cheap way in; open a conversation only where they point at something.
 
+For recorded history, prefer the existing `ultimate.action('system', 'stream', args)` over ad-hoc SQL. Read
+`ultimate.api('system')` first. Filter with `sources`, `kinds`, `conversation`, `errors` or `text`; the result is
+`{ rows, next?, head }` (default 200 rows, maximum 500). Page backward with `before: next`, keeping the same filter
+and reusing the opaque cursor, without gaps or repeats; `after: head` follows live. Keep output small: select only
+fields needed for the finding, never raw secrets, headers or full argument dumps. Paging respects retention; it
+cannot recover expired records or provider detail already sanitized away.
+
+`ultimate.trace` is a bounded newest sample (default 100 calls, maximum 1000), not the whole retained history.
+State the sample's filters, time window and coverage before counting failures or retries. Correlate trace/parent
+chains and conversation entries: search hits and duplicated standing-call records are not automatically separate
+incidents. Distinguish protective guard failures and intentional negative probes from command-writing mistakes and
+actual defects. Name a root cause only when the evidence establishes it; an HTTP status alone does not.
+
 - **memory** — distil the project memory: memories that are outdated, contradicted, duplicated or too vague; lessons
   that later conversations taught but nobody remembered. Output add/update/delete ops, each with reason and evidence
   (the memory review in extensions/lineage/README.md). Never drop or weaken the memory about the user.

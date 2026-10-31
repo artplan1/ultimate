@@ -11,6 +11,10 @@ Read only. Never edit files, commit, call actions that change state, message any
 
 Start cheap: conversation summaries, the root's tally (codemode `ultimate.entries(<root>)`), `memory`, `ultimate.trace` and `ultimate.action('dream', 'stats')`. Open single conversations only where those point at something. Keep codemode output small: filter in the script and return conclusions, not dumps.
 
+`ultimate.trace` is only the newest sample (default 100 calls, maximum 1000). For more recorded history, read `ultimate.api('system')`, then page the read-only `ultimate.action('system', 'stream', args)` as described in DREAM.md, rather than querying storage with ad-hoc SQL. Keep filters unchanged across opaque cursors; retention and sanitization still limit what can be recovered. Never return secrets, headers or full argument dumps.
+
+Define the sample's filters, time window and coverage; correlate trace/parent chains and conversation entries before counting retries or incidents. Search hits and duplicated standing-call records are not independent incidents by themselves. Separate protective guard failures and intentional negative probes, command-writing mistakes, and actual defects; do not infer a root cause from an HTTP status alone.
+
 Report:
 
 1. One line: what this pass found overall.

@@ -1,0 +1,99 @@
+import { Type } from '@earendil-works/pi-ai'
+import { defineExtension, defineTool } from '@earendil-works/pi-durable'
+import type { ExtensionHost } from '../../server/extensions.ts'
+import { createIndex, DEFAULT_CONTEXT, DEFAULT_LIMIT, MAX_CONTEXT, MAX_LIMIT } from './search.ts'
+import type { SearchResult } from './types.ts'
+
+/** One file in a result: its path, or a matched line with the numbered context around it. */
+function itemText(item: SearchResult['items'][number]): string {
+  if (item.line === undefined) return item.path
+  const line = item.line
+  const before = item.before ?? []
+  const after = item.after ?? []
+  return [
+    ...before.map((text, index) => `${item.path}:${line - before.length + index}: ${text}`),
+    `${item.path}:${line}: ${item.text}`,
+    ...after.map((text, index) => `${item.path}:${line + index + 1}: ${text}`),
+  ].join('\n')
+}
+
+/** The result as the model reads it, carrying what the details carry. */
+function resultText(result: SearchResult): string {
+  if (!result.items.length) return result.kind === 'files' ? 'No files match.' : 'No matches.'
+  const head =
+    result.kind === 'files'
+      ? `Found ${result.total} ${result.total === 1 ? 'file' : 'files'}${result.more ? `, showing ${result.items.length}` : ''}:`
+      : `Showing ${result.items.length} ${result.items.length === 1 ? 'match' : 'matches'}:`
+  const tail =
+    result.kind === 'content'
+      ? result.more
+        ? 'More matches than shown; raise limit or narrow the pattern or glob.'
+        : ''
+      : result.more
+        ? `${result.more} more ${result.more === 1 ? 'file' : 'files'}; raise limit or narrow the glob.`
+        : ''
+  return [head, ...result.items.map(itemText), tail].filter(Boolean).join('\n')
+}
+
+export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoot'>) {
+  const index = createIndex()
+  host.onClose(async () => index.dispose())
+  return defineExtension({
+    name: 'search',
+    tools: [
+      defineTool({
+        name: 'search',
+        // Every search only reads the index and writes no frecency or history database, so a rerun cannot do harm.
+        replay: 'safe',
+        description: `Search files and the text inside them from a native index of the conversation's working directory. Prefer it over bash rg, grep, find or ls: query finds files by fuzzy path, pattern searches contents, glob filters either or lists files on its own, and one call returns relative paths, line numbers and context. The index follows file changes, so new files show up without a rescan. Read-only: it changes nothing in the project. limit defaults to ${DEFAULT_LIMIT} items (max ${MAX_LIMIT}) and context to ${DEFAULT_CONTEXT} lines (max ${MAX_CONTEXT}).`,
+        parameters: Type.Object({
+          query: Type.Optional(
+            Type.String({
+              minLength: 1,
+              description:
+                'Fuzzy path to find files by, such as a file name or path fragments like "workflow runner". Omit to search contents or list files by glob.',
+            }),
+          ),
+          pattern: Type.Optional(
+            Type.String({
+              minLength: 1,
+              description:
+                'Text, or a regular expression with mode "regex", to search for inside files. Omit to find files instead.',
+            }),
+          ),
+          glob: Type.Optional(
+            Type.String({
+              minLength: 1,
+              description:
+                'Glob limiting the search, such as "src/**/*.ts"; on its own it lists the files that match.',
+            }),
+          ),
+          mode: Type.Optional(
+            Type.Union([Type.Literal('plain'), Type.Literal('regex')], {
+              description: 'How pattern matches: plain text (default) or a regular expression.',
+            }),
+          ),
+          context: Type.Optional(
+            Type.Integer({
+              minimum: 0,
+              maximum: MAX_CONTEXT,
+              description: `Lines of context before and after each content match; default ${DEFAULT_CONTEXT}.`,
+            }),
+          ),
+          limit: Type.Optional(
+            Type.Integer({
+              minimum: 1,
+              maximum: MAX_LIMIT,
+              description: `Maximum items returned; default ${DEFAULT_LIMIT}.`,
+            }),
+          ),
+        }),
+        async execute(args, api, context) {
+          const result = await index.search(args, api.env?.cwd ?? host.projectRoot)
+          await api.details(result, context)
+          return { output: [{ type: 'text', text: resultText(result) }] }
+        },
+      }),
+    ],
+  })
+}

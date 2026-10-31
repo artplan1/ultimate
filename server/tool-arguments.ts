@@ -9,6 +9,7 @@ import type {
 } from '@earendil-works/pi-ai'
 import { defineExtension, GenerationTask, hook, ProviderDoc } from '@earendil-works/pi-durable'
 import type { HookApi } from '@earendil-works/pi-durable'
+import { classify } from '../lib/model-error.ts'
 import { traceContext } from './trace.ts'
 import type { CallTrace } from './trace.ts'
 
@@ -119,65 +120,6 @@ function record(
     (error: unknown) =>
       finish(false, new Error(classify('error', error instanceof Error ? error.message : ''))),
   )
-}
-
-/**
- * Error codes a model failure row may name: provider and OAuth codes, network errors and a few plain words. A fixed
- * list, so nothing of a prompt, a response body or a credential can pass. Mirrors `KNOWN` in extensions/health/store.ts.
- */
-const CODES = new Set([
-  'invalid_grant',
-  'invalid_token',
-  'invalid_client',
-  'invalid_request',
-  'invalid_api_key',
-  'unauthorized_client',
-  'access_denied',
-  'authentication_error',
-  'permission_error',
-  'insufficient_quota',
-  'rate_limit_error',
-  'rate_limit_exceeded',
-  'usage_limit_reached',
-  'overloaded_error',
-  'api_error',
-  'server_error',
-  'not_found_error',
-  'model_not_found',
-  'invalid_request_error',
-  'context_length_exceeded',
-  'request_too_large',
-  'unauthorized',
-  'forbidden',
-  'expired',
-  'revoked',
-  'overloaded',
-  'timeout',
-  'aborted',
-  'quota',
-  'unavailable',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ENOTFOUND',
-  'ETIMEDOUT',
-  'EAI_AGAIN',
-])
-
-/**
- * What a failed model row stores instead of the provider's message, which can echo the request: the stop reason, then
- * the HTTP status when the message starts with one or names it (`status 401`, `HTTP 429`) and the allowlisted codes it
- * contains, in order, at most four.
- */
-export function classify(stopReason: string, message = '') {
-  const parts = [stopReason]
-  const status = /^\s*([45]\d\d)\b|\b(?:status|http)[\s:=]*([45]\d\d)\b/i.exec(message)
-  if (status) parts.push(status[1] ?? status[2])
-  for (const word of message.split(/[^A-Za-z_]+/)) {
-    const code = CODES.has(word) ? word : CODES.has(word.toLowerCase()) ? word.toLowerCase() : ''
-    if (code && !parts.includes(code)) parts.push(code)
-    if (parts.length >= 5) break
-  }
-  return parts.join(' ')
 }
 
 /** The stream `open` returns, ended with an error and aborted once a tool call's arguments degenerate. */

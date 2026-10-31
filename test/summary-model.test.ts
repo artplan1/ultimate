@@ -37,7 +37,7 @@ afterEach(async () => {
 })
 
 /** A summary provider whose models answer with a valid reply summary; `requests` records what was asked. */
-function summaryProvider(provider: string, ids: string[]) {
+function summaryProvider(provider: string, ids: string[], failure?: string) {
   const handle = fauxProvider({ provider, models: ids.map((id) => ({ id, reasoning: true })) })
   const requests: { model: string; reasoning: SimpleStreamOptions['reasoning'] }[] = []
   return {
@@ -49,18 +49,22 @@ function summaryProvider(provider: string, ids: string[]) {
         const stream = createAssistantMessageEventStream()
         const answer = {
           ...fauxAssistantMessage(
-            JSON.stringify({
-              activity: 'Implemented the change.',
-              title: 'Implement the change',
-              summary: 'Implemented the change.',
-            }),
+            failure
+              ? ''
+              : JSON.stringify({
+                  activity: 'Implemented the change.',
+                  title: 'Implement the change',
+                  summary: 'Implemented the change.',
+                }),
+            failure ? { stopReason: 'error', errorMessage: failure } : {},
           ),
           provider: model.provider,
           model: model.id,
           api: model.api,
         }
         queueMicrotask(() => {
-          stream.push({ type: 'done', reason: 'stop', message: answer })
+          if (failure) stream.push({ type: 'error', reason: 'error', error: answer })
+          else stream.push({ type: 'done', reason: 'stop', message: answer })
           stream.end(answer)
         })
         return stream
@@ -75,6 +79,7 @@ async function launch({
   available = (model: Model<Api>) => model.provider !== 'faux',
   interrupt,
   established = true,
+  failure,
 }: {
   user?: JsonObject
   project?: JsonObject
@@ -82,6 +87,7 @@ async function launch({
   /** Close the harness once the summary task memoizes its model, or when it is about to ask one. */
   interrupt?: 'model' | 'generate'
   established?: boolean
+  failure?: string
 } = {}) {
   const userHome = await temp('ultimate-summary-model-')
   if (user) {
@@ -91,7 +97,7 @@ async function launch({
   const models = createModels()
   const main = fauxProvider({ tokensPerSecond: 100000 })
   const luna = summaryProvider('openai-codex', ['gpt-6-luna'])
-  const acme = summaryProvider('acme', ['mini', 'large'])
+  const acme = summaryProvider('acme', ['mini', 'large'], failure)
   models.setProvider(main.provider)
   models.setProvider(luna.provider)
   models.setProvider(acme.provider)
@@ -112,7 +118,11 @@ async function launch({
   registry.install(defineExtension({ name: 'conversations', ...summaryBehavior(host) }))
   harness = await Harness.open(storage, { models, registry }, context)
   let interruption: Promise<void> | undefined
+  const responses: unknown[] = []
   harness.subscribeCommits((publication) => {
+    for (const change of publication.changes)
+      if (change.type === 'task' && change.value.memos?.response)
+        responses.push(change.value.memos.response)
     if (
       !interruption &&
       publication.changes.some(
@@ -145,6 +155,7 @@ async function launch({
     userHome,
     settings,
     notices,
+    responses,
     requests: () => [...luna.requests, ...acme.requests],
     read: () => harness.snapshot(Summaries, root.id, context),
     tasks: async () => (await harness.inspect(context)).tasks,
@@ -205,6 +216,60 @@ it('asks the configured summary model with its thinking level and records it', a
     { activity: 'Implemented the change.', model: 'acme/mini' },
   ])
   expect(await f.ledger()).toEqual(['faux/faux-1', 'acme/mini'])
+})
+
+it.each([
+  ['"param":"reasoning_effort"', 'reasoning_effort'],
+  ["Unsupported parameter: 'max_tokens'", 'max_tokens'],
+  ['"param":"reasoning_effort-sk-private-credential"', undefined],
+  ['"param":"sk-private-credential"', undefined],
+  ['"param":"reasoning_effort\\\\u0022sk-private-credential"', undefined],
+])(
+  'retains safe summary failure evidence, not provider text (%s)',
+  async (parameter, rejectedParameter) => {
+    const failure = `400 {"code":"invalid_request_error",${parameter},"message":"Bearer sk-private-credential https://private.invalid/?key=secret PROMPT_ECHO"}`
+    const f = await launch({ user: { summaryModel: 'acme/mini:high' }, failure })
+    await f.submit()
+    await until(async () => (await f.read())?.assessmentStatus === 'error')
+    const discarded = (await f.entries()).filter((entry) => SummaryDiscarded.is(entry))
+    expect(discarded).toHaveLength(1)
+    const diagnostic = {
+      classification: 'error 400 invalid_request_error',
+      ...(rejectedParameter ? { rejectedParameter } : {}),
+      request: { reasoning: 'high', outputLimit: 2048, tools: false, session: false },
+    }
+    expect(f.responses.at(-1)).toMatchObject({
+      text: '',
+      stopReason: 'error',
+      failure: diagnostic,
+    })
+    expect(discarded[0].data.cause).toBe(
+      `Summary request did not finish: ${JSON.stringify(diagnostic)}`,
+    )
+    const persisted = JSON.stringify({
+      response: f.responses,
+      discard: discarded[0].data,
+    })
+    for (const secret of ['sk-private-credential', 'private.invalid', 'PROMPT_ECHO', 'Bearer'])
+      expect(persisted).not.toContain(secret)
+    expect(f.requests()).toEqual([{ model: 'acme/mini', reasoning: 'high' }])
+  },
+)
+
+it('does not invent a status, code or parameter when a summary provider supplies none', async () => {
+  const f = await launch({
+    user: { summaryModel: 'acme/mini:high' },
+    failure: 'sk-private-credential',
+  })
+  await f.submit()
+  await until(async () => (await f.read())?.assessmentStatus === 'error')
+  const discarded = (await f.entries()).filter((entry) => SummaryDiscarded.is(entry))
+  expect(
+    JSON.parse(discarded[0].data.cause.slice('Summary request did not finish: '.length)),
+  ).toEqual({
+    classification: 'error',
+    request: { reasoning: 'high', outputLimit: 2048, tools: false, session: false },
+  })
 })
 
 it('uses the tiny family, GPT-6 Luna with low thinking, when no summary model is set', async () => {

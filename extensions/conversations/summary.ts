@@ -31,6 +31,7 @@ import type { ExtensionHost } from '../../server/extensions.ts'
 import { Trees } from './api.ts'
 import { summaryModel } from './summary-model.ts'
 import { isInput } from '../../lib/entries.ts'
+import { classify } from '../../lib/model-error.ts'
 import type { SummaryModel, SummaryModelHost } from './summary-model.ts'
 import type {
   IntentSummary,
@@ -72,6 +73,34 @@ export type ResponseReceipt = {
   usage?: JsonRepresentation<Usage>
   text: string
   stopReason: AssistantMessage['stopReason']
+  /** Bounded diagnostics only; provider error messages can contain credentials or echo the request. */
+  failure?: {
+    classification: string
+    rejectedParameter?: string
+    /** SDK request shape, not the provider's translated wire payload. No prompt or field values from errors. */
+    request: { reasoning?: string; outputLimit: number; tools: boolean; session: boolean }
+  }
+}
+
+const SUMMARY_PARAMETERS = new Set([
+  'model',
+  'messages',
+  'max_tokens',
+  'max_completion_tokens',
+  'reasoning_effort',
+  'thinking',
+  'temperature',
+  'top_p',
+  'tools',
+  'tool_choice',
+  'stream',
+])
+
+/** Only exact, known field names from a structured `param` or quoted parameter diagnostic may survive. */
+function rejectedParameter(message = '') {
+  const match = /"param"\s*:\s*"([^"\\]*)"|\bparameter\s*:\s*['"]([^'"\\]*)['"]/i.exec(message)
+  const name = match?.[1] ?? match?.[2]
+  return name && SUMMARY_PARAMETERS.has(name) ? name : undefined
 }
 
 export type SummaryState = {
@@ -183,6 +212,9 @@ export function transcriptText(messages: readonly Message[]) {
 /** Notes the host places for the model, not the conversation's own exchange: they never name or summarize it. */
 const NOTES = new Set(['pause.note'])
 
+/** The summary request's output cap, kept in its receipt so a failure can be read against the request it made. */
+const SUMMARY_TOKENS = 2048
+
 /** The context's messages without host notes; a note is a user-role write and would read as the newest request. */
 export function exchangeMessages(view: Pick<ContextView, 'entries' | 'contributions'>) {
   return view.entries.flatMap((entry, index) =>
@@ -225,14 +257,28 @@ export async function askSummaryModel(
   const events = models.streamSimple(
     model,
     { systemPrompt, messages: [{ role: 'user', content: input, timestamp: Date.now() }] },
-    { ...(thinking === 'off' ? {} : { reasoning: thinking }), maxTokens: 2048, signal },
+    { ...(thinking === 'off' ? {} : { reasoning: thinking }), maxTokens: SUMMARY_TOKENS, signal },
   )
   const receive = async (answer: AssistantMessage) => {
     const text = answer.content
       .flatMap((part) => (part.type === 'text' ? [part.text] : []))
       .join('')
+    const failed = answer.stopReason === 'error' || answer.stopReason === 'aborted'
+    const failure: ResponseReceipt['failure'] = failed
+      ? {
+          classification: classify(answer.stopReason, answer.errorMessage),
+          rejectedParameter: rejectedParameter(answer.errorMessage),
+          request: {
+            reasoning: thinking === 'off' ? undefined : thinking,
+            outputLimit: SUMMARY_TOKENS,
+            tools: false,
+            session: false,
+          },
+        }
+      : undefined
     const received = copyJson(
       {
+        failure,
         provider: answer.provider,
         model: answer.model,
         usage: answer.usage,
@@ -284,7 +330,11 @@ export async function generateSummary(
     signal,
     receipt,
   )
-  if (response.stopReason !== 'stop') throw new Error('Summary request did not finish')
+  if (response.stopReason !== 'stop')
+    throw new Error(
+      'Summary request did not finish' +
+        (response.failure ? `: ${JSON.stringify(response.failure)}` : ''),
+    )
   const parsed: unknown = JSON.parse(response.text)
   if (
     mode === 'reply' &&

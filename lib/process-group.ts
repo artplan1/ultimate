@@ -24,11 +24,14 @@ export type Group = { child: GroupProcess; ended: Promise<boolean>; closed: Prom
  * it is polled every few milliseconds, never across a gap.
  */
 
+/** `ps` by its absolute path: a caller's PATH may be stubbed (tests do), and identity must not depend on it. */
+const PS = '/bin/ps'
+
 /** Who process `pid` is, the same on every read while it lives (its start time), or undefined once it is gone. */
 export function identify(pid: number): string | undefined {
   if (process.platform === 'darwin') {
     try {
-      return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8' }).trim()
+      return execFileSync(PS, ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8' }).trim()
     } catch {
       // ps exits 1 when the pid is gone.
       return undefined
@@ -51,7 +54,7 @@ function darwinEnded(pid: number, denied: unknown) {
   if (process.platform !== 'darwin' || (denied as NodeJS.ErrnoException).code !== 'EPERM')
     return false
   try {
-    const output = execFileSync('ps', ['-A', '-o', 'pgid=,stat='], { encoding: 'utf8' })
+    const output = execFileSync(PS, ['-A', '-o', 'pgid=,stat='], { encoding: 'utf8' })
     let found = false
     for (const line of output.trim().split('\n')) {
       const row = /^(\d+)\s+([?IRSTUZ][+<>AELNSsVWX]*)$/.exec(line.trim())

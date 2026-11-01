@@ -1,0 +1,21 @@
+Search files and their contents through `@ff-labs/fff-node`, a native file and content index, so an agent finds files with one tool call instead of shelling out to `rg`, `grep` or `find`.
+
+One tool, `search`, over the conversation's working directory:
+
+- `query` finds files by fuzzy path; `pattern` searches inside files; together they are rejected.
+- `pattern` is literal text, passed to the native multi-pattern matcher exactly as written: spaces, `*`, `?`, `[...]` and `{...}` mean nothing special and never become query constraints.
+- `glob` limits either search to matching paths, or lists them when it is the only argument. Searches filter by the glob through the native glob listing, so `?`, character classes, braces and spaces in a file path all work. Globs keep the index's own meaning: one without a `/` that starts with `*` matches file names at any depth, any other glob matches the path relative to the working directory, so use `**/` to reach nested files.
+- Content search is literal only: this native index has no entry point for a raw regular expression. Use `bash` with `rg` for a regex.
+- A content pattern cannot contain a newline: the native matcher searches line by line. `context` adds lines around each match (default 2, capped at 10); `limit` bounds the items returned (default 30, capped at 100).
+
+`details` is a `SearchResult` from `types.ts`: `kind` is `files` or `content`, `items` carry a relative `path` and, for content, `line`, `text` and `before`/`after` context, `total` counts matches and `more` counts those beyond the returned page. For files both are exact. The native matcher counts only the matches it returns, so for content `total` is the number returned, and `more` is 1 only after the search actually found one further match — never inferred from the native cursor, which only says files are unscanned. A full content total would mean scanning every file on every search. The tool text says the same in words (`n more files`, `more matches than shown`).
+
+## Index lifecycle
+
+`search.ts` keeps one native `FileFinder` per working directory, created on first use and scanned once before searching; a scan that does not finish within 30 seconds fails the call instead of searching a partial index. Each call holds its index while it runs, so a release never destroys a finder another call is using. An index with no calls left is released after five idle minutes, and unloading or reloading the extension releases the rest, keeping any index still in use until its last call ends. A conversation that changes its working directory gets its own index; the previous one falls idle and is released.
+
+Search is read-only: finders are created without frecency or history databases and `trackQuery` is never called, so nothing is written to the project or the user's home, and a read-only agent (scout, reviewer, a dream pass) can search safely. The index follows file-system changes, so files created during a conversation are found without an explicit rescan. A glob filter reads its matching paths from that same index, so a filter over an enormous tree costs one listing of its matches in memory.
+
+The native binary comes from the platform package of `@ff-labs/fff-node` 0.11.0, pinned exactly in `package.json`; it supports macOS, Linux and Windows on x64 and arm64. On a platform without a binary, `FileFinder.create` throws and the tool returns that error.
+
+Tests in `test/search.test.ts` search a temporary directory in-process with the real native library, covering file, glob and literal content search, patterns the native query parser would otherwise rewrite, argument validation and limits, proven-more counts, index reuse across calls, idle release and release on unload.

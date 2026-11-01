@@ -240,6 +240,8 @@ export type SummaryReceipt = {
   model: SummaryModel
   response?: ResponseReceipt
   save?(response: ResponseReceipt): Promise<ResponseReceipt>
+  /** Output tokens the answer may spend, reasoning included, within the model's own limit; default 2048. */
+  maxTokens?: number
 }
 
 /** Ask the receipt's summary model once, or return the response the receipt already holds. */
@@ -254,10 +256,11 @@ export async function askSummaryModel(
   const { provider, id, thinking } = receipt.model
   const model = models.getModel(provider, id)
   if (!model) throw new Error(`Summary model ${provider}/${id} is unavailable`)
+  const outputLimit = Math.min(receipt.maxTokens ?? SUMMARY_TOKENS, model.maxTokens || Infinity)
   const events = models.streamSimple(
     model,
     { systemPrompt, messages: [{ role: 'user', content: input, timestamp: Date.now() }] },
-    { ...(thinking === 'off' ? {} : { reasoning: thinking }), maxTokens: SUMMARY_TOKENS, signal },
+    { ...(thinking === 'off' ? {} : { reasoning: thinking }), maxTokens: outputLimit, signal },
   )
   const receive = async (answer: AssistantMessage) => {
     const text = answer.content
@@ -270,7 +273,7 @@ export async function askSummaryModel(
           rejectedParameter: rejectedParameter(answer.errorMessage),
           request: {
             reasoning: thinking === 'off' ? undefined : thinking,
-            outputLimit: SUMMARY_TOKENS,
+            outputLimit,
             tools: false,
             session: false,
           },

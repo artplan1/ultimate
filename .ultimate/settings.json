@@ -17,10 +17,8 @@
   "lander": {
     "checks": [
       { "command": "mise exec node@26.5.0 -- pnpm check", "timeout": 300 },
-      [
-        { "command": "mise exec node@26.5.0 -- pnpm test", "timeout": 600 },
-        { "command": "mise exec node@26.5.0 -- pnpm test:e2e", "timeout": 600 }
-      ]
+      { "command": "mise exec node@26.5.0 -- pnpm test --maxWorkers=2", "timeout": 900 },
+      { "command": "mise exec node@26.5.0 -- pnpm test:e2e", "timeout": 900 }
     ]
   }
 }

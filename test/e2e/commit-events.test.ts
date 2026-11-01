@@ -3,6 +3,14 @@ import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
+// The bash tool takes its commit log from `tmpdir()`: point that at a missing directory to fail every append, while
+// `TMPDIR` itself stays valid, so git still writes its own temporary files.
+const osState = vi.hoisted(() => ({ tmp: undefined as string | undefined }))
+vi.mock('node:os', async (importOriginal) => {
+  const os = await importOriginal<typeof import('node:os')>()
+  return { ...os, tmpdir: () => osState.tmp ?? os.tmpdir() }
+})
 import type { ConversationId, ToolExecutionApi } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import type { createBashTool } from '@earendil-works/pi-durable/tools'
@@ -28,6 +36,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   vi.unstubAllEnvs()
+  osState.tmp = undefined
   await removeTemp(cwd)
 })
 
@@ -241,7 +250,7 @@ it('records nothing when bash made no commit', async () => {
 
 it('never fails a commit when the log cannot be written', async () => {
   // A log path inside a missing directory makes every hook's append fail.
-  vi.stubEnv('TMPDIR', join(cwd, 'missing'))
+  osState.tmp = join(cwd, 'missing')
   const { result } = await bash('git commit -q --allow-empty -m kept && echo ok')
   expect(result.isError).toBeFalsy()
   expect(await git('log', '-1', '--format=%s')).toBe('kept')

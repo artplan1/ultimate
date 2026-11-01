@@ -45,7 +45,9 @@ async function serve(home: string, ultimateRoot: string, projectRoot: string) {
   return server
 }
 
-it.concurrent('asks @ultimate once to merge origin into a diverged clone that is the project', async () => {
+// One test at a time: each copies the whole repository, hashes it into a fixture clone and clones that again. Three of
+// those at once starve the disk, and git fails mid-clone with "failed to copy file ... objects/xx/...".
+it('asks @ultimate once to merge origin into a diverged clone that is the project', async () => {
   const home = await temp()
   const root = await diverged(home)
   const server = await serve(home, root, root)
@@ -77,7 +79,7 @@ it.concurrent('asks @ultimate once to merge origin into a diverged clone that is
   expect(JSON.stringify(refused.data)).toContain('The checkout has uncommitted changes')
 })
 
-it.concurrent('offers no merge while the lander is landing into the clone', async () => {
+it('offers no merge while the lander is landing into the clone', async () => {
   const home = await temp()
   const root = await diverged(home)
   const server = await serve(home, root, root)
@@ -93,7 +95,7 @@ it.concurrent('offers no merge while the lander is landing into the clone', asyn
   expect((await post(server, '/api/extensions/update/actions/merge', {})).status).not.toBe(200)
 })
 
-it.concurrent('offers no merge where the clone is not the project', async () => {
+it('offers no merge where the clone is not the project', async () => {
   const home = await temp()
   const root = await diverged(home)
   const project = join(home, 'project')

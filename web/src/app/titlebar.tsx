@@ -160,7 +160,7 @@ function Brand() {
           <button
             className={cn(
               wordmark,
-              'transition-opacity outline-none hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring md:hidden',
+              'cursor-pointer transition-opacity outline-none hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring md:hidden',
             )}
             data-ui="wordmark"
             title="Switch surface"
@@ -176,9 +176,7 @@ function Brand() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-96" sideOffset={4}>
-          <DropdownMenuLabel className="px-2 pt-1 pb-1.5 font-mono text-[10.5px] font-normal tracking-wider text-muted-foreground uppercase">
-            Surfaces
-          </DropdownMenuLabel>
+          <DropdownMenuLabel className="px-2 pt-1 pb-1.5 section-label">Surfaces</DropdownMenuLabel>
           {surfaces.map((surface, index) => {
             const Item = surface.icon
             const active = surface.id === shown
@@ -231,7 +229,7 @@ function SurfaceItems() {
           <button
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex items-center border-y-2 border-transparent px-0.5 lowercase transition-colors outline-none hover:text-foreground focus-visible:text-foreground',
+              'flex cursor-pointer items-center border-y-2 border-transparent px-0.5 lowercase transition-colors outline-none hover:text-foreground focus-visible:text-foreground',
               active && 'border-b-brand text-foreground',
             )}
             data-selected={active || undefined}

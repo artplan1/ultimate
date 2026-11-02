@@ -13,6 +13,7 @@ import {
   UsageDoc,
 } from '@earendil-works/pi-durable'
 import { afterEach, expect, it } from 'vitest'
+import { onCommit } from '../lib/commits.ts'
 import type { ActionContext } from '../server/actions.ts'
 import { context } from '../server/harness.ts'
 import { Metadata } from '../server/metadata.ts'
@@ -119,7 +120,7 @@ async function launch({
   harness = await Harness.open(storage, { models, registry }, context)
   let interruption: Promise<void> | undefined
   const responses: unknown[] = []
-  harness.subscribeCommits((publication) => {
+  onCommit(harness, (publication) => {
     for (const change of publication.changes)
       if (change.type === 'task' && change.value.memos?.response)
         responses.push(change.value.memos.response)

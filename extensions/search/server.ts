@@ -1,4 +1,4 @@
-import { Type } from '@earendil-works/pi-ai'
+import { int, obj, opt, str } from '@earendil-works/pi-schema'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { createIndex, DEFAULT_CONTEXT, DEFAULT_LIMIT, MAX_CONTEXT, MAX_LIMIT } from './search.ts'
@@ -53,37 +53,37 @@ export default function search(host: Pick<ExtensionHost, 'onClose' | 'projectRoo
         // Every search only reads the index and writes no frecency or history database, so a rerun cannot do harm.
         replay: 'safe',
         description: `Search files and the text inside them from a native index of the conversation's working directory. Prefer it over bash rg, grep, find or ls: query finds files by fuzzy path, pattern searches contents as literal text (use bash rg for a regex), glob filters either or lists files on its own, and one call returns relative paths, line numbers and context. The index follows file changes, so new files show up without a rescan. Read-only: it changes nothing in the project. limit defaults to ${DEFAULT_LIMIT} items (max ${MAX_LIMIT}) and context to ${DEFAULT_CONTEXT} lines (max ${MAX_CONTEXT}).`,
-        parameters: Type.Object({
-          query: Type.Optional(
-            Type.String({
+        parameters: obj({
+          query: opt(
+            str({
               minLength: 1,
               description:
                 'Fuzzy path to find files by, such as a file name or path fragments like "workflow runner". Omit to search contents or list files by glob.',
             }),
           ),
-          pattern: Type.Optional(
-            Type.String({
+          pattern: opt(
+            str({
               minLength: 1,
               description:
                 'Literal text to search for inside files, taken exactly as written, spaces and glob characters included; use bash rg for a regex. Omit to find files instead.',
             }),
           ),
-          glob: Type.Optional(
-            Type.String({
+          glob: opt(
+            str({
               minLength: 1,
               description:
                 'Glob limiting the search, such as "src/**/*.ts"; on its own it lists the files that match.',
             }),
           ),
-          context: Type.Optional(
-            Type.Integer({
+          context: opt(
+            int({
               minimum: 0,
               maximum: MAX_CONTEXT,
               description: `Lines of context before and after each content match; default ${DEFAULT_CONTEXT}.`,
             }),
           ),
-          limit: Type.Optional(
-            Type.Integer({
+          limit: opt(
+            int({
               minimum: 1,
               maximum: MAX_LIMIT,
               description: `Maximum items returned; default ${DEFAULT_LIMIT}.`,

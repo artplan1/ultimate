@@ -211,7 +211,7 @@ export default function prompt(host: ExtensionHost) {
   return defineExtension({
     name: 'prompt',
     hooks: [
-      // Pi upstream: @earendil-works/pi-durable@1.4.0 — patched transactional beforeInput hook.
+      // Pi upstream: @earendil-works/pi-durable@1.5.0 — patched transactional beforeInput hook.
       // The build is a note on the input that starts a run, not a system-prompt section: every hot reload changed that
       // section, and a changed system prompt rewrites the whole prompt cache. A conversation's first run records it.
       hook(GenerationTask, {
@@ -295,14 +295,9 @@ export default function prompt(host: ExtensionHost) {
           '- When a "Build changed" note arrives with your input, you were hot-swapped: your tools, prompt, or UI may be different now. Find out what changed (the changed list, `git log`/`git diff`' +
             (has('codemode') ? ', `ultimate.extensions()`' : '') +
             ') and test new behaviour before relying on it. An "Instructions changed" or "Docs changed" line means those files changed: your system prompt already carries changed instructions; re-read changed docs before relying on them.',
-          ...(has('screenshot')
-            ? [
-                '- You can see your own UI: take a screenshot and look at it after UI changes instead of assuming they render correctly.',
-              ]
-            : []),
         ].join('\n')
       }),
-      // Pi upstream: @earendil-works/pi-coding-agent@1.4.0 src/core/system-prompt.ts and src/core/tools/*.ts — copied tool guidance adapted from unexported prompt contributions. Drop when Pi exports buildSystemPromptSections and the per-tool system prompt contributions.
+      // Pi upstream: @earendil-works/pi-coding-agent@1.5.0 src/core/system-prompt.ts and src/core/tools/*.ts — copied tool guidance adapted from unexported prompt contributions. Drop when Pi exports buildSystemPromptSections and the per-tool system prompt contributions.
       section('tools', (input) => {
         const guidance: Record<string, string> = {
           read: '- read: inspect files, with offset/limit for large files.',

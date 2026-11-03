@@ -27,30 +27,34 @@ export async function playwrightChromiums(
   platform = process.platform,
   arch = process.arch,
 ) {
-  const [cache, executable] =
+  const [cache, executables] =
     platform === 'darwin'
       ? [
           join(home, 'Library/Caches/ms-playwright'),
-          `chrome-mac-${arch}/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+          [
+            `chrome-mac-${arch}/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+            // Older Playwright releases installed their own Chromium build.
+            'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+          ],
         ]
-      : [join(home, '.cache/ms-playwright'), 'chrome-linux64/chrome']
+      : [join(home, '.cache/ms-playwright'), ['chrome-linux64/chrome']]
   return (await readdir(cache).catch(() => []))
     .filter((name) => name.startsWith('chromium-'))
     .toSorted((a, b) => b.localeCompare(a, 'en', { numeric: true }))
-    .map((name) => join(cache, name, executable))
+    .flatMap((name) => executables.map((executable) => join(cache, name, executable)))
 }
 
 export async function browserBinary() {
   const candidates = [
     process.env.ULTIMATE_CHROMIUM,
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome-stable',
     ...(process.platform === 'darwin'
       ? ['/Applications', join(homedir(), 'Applications')].flatMap((directory) => [
           join(directory, 'Google Chrome.app/Contents/MacOS/Google Chrome'),
           join(directory, 'Chromium.app/Contents/MacOS/Chromium'),
         ])
       : []),
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome-stable',
     ...(await playwrightChromiums(homedir())),
   ].filter((path): path is string => !!path)
   for (const path of candidates) {

@@ -93,6 +93,21 @@ it('finds files by fuzzy path, lists by glob and searches contents with context'
   expect(matches.text).toContain('src/runner.ts:1: import { start } from "./start"')
 })
 
+it('treats a pattern as a regular expression when it uses regex syntax', async () => {
+  const { root, run } = await fixture()
+  await writeFile(join(root, 'code.ts'), 'foo123bar\nfoo bar\nconst a = 7\nERROR: boom\n')
+
+  // Regex syntax that compiles is matched as a regular expression, so \\d matches the digits.
+  const matched = await run({ pattern: 'foo\\d+bar', context: 0 })
+  expect(matched.details.items).toEqual([{ path: 'code.ts', line: 1, text: 'foo123bar' }])
+
+  const alternation = await run({ pattern: 'ERROR|error', context: 0 })
+  expect(alternation.details.items.map((item) => item.line)).toEqual([4])
+
+  // A pattern with regex characters that does not compile stays literal text, so it matches nothing here.
+  expect((await run({ pattern: '(unclosed', context: 0 })).details.items).toEqual([])
+})
+
 it('searches a literal pattern the native query parser would rewrite', async () => {
   const { root, run } = await fixture()
   await mkdir(join(root, 'src'))
@@ -108,7 +123,8 @@ it('searches a literal pattern the native query parser would rewrite', async () 
 
   const globChars = await run({ pattern: '*.ts TODO' })
   expect(globChars.details.items.map((item) => item.line)).toEqual([2])
-  const classes = await run({ pattern: 'arr[0] ?' })
+  // `?` is regex syntax, so a literal search for it escapes the metacharacters.
+  const classes = await run({ pattern: 'arr\\[0\\] \\?' })
   expect(classes.details.items.map((item) => item.line)).toEqual([3])
 })
 
@@ -169,10 +185,8 @@ it('rejects requests the native engine cannot answer honestly', async () => {
   await expect(run({})).rejects.toThrow('Pass query (fuzzy path search)')
   await expect(run({ query: 'a', context: 1 })).rejects.toThrow('context applies to content search')
   await expect(run({ pattern: 'a\nb' })).rejects.toThrow('cannot contain a newline')
-  const literalHint = await run({ pattern: 'hello|goodbye' })
-  expect(literalHint.text).toBe(
-    'No matches.\nSearch matches literal text; use bash rg for a regex.',
-  )
+  // `|` is regex syntax and the pattern compiles, so it matches either word rather than the literal pipe.
+  expect((await run({ pattern: 'hello|goodbye' })).text).toBe('Showing 1 match:\na.ts:1: hello')
 })
 
 it('bounds file items by limit', async () => {

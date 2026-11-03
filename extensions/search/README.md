@@ -3,9 +3,8 @@ Search files and their contents through `@ff-labs/fff-node`, a native file and c
 One tool, `search`, over the conversation's working directory:
 
 - `query` finds files by fuzzy path; `pattern` searches inside files; together they are rejected.
-- `pattern` is literal text, passed to the native multi-pattern matcher exactly as written: spaces, `*`, `?`, `[...]` and `{...}` mean nothing special and never become query constraints.
+- `pattern` searches inside files. A pattern that uses regular-expression syntax and compiles is matched as a regular expression; anything else is literal text, taken exactly as written, so spaces, `*`, `?`, `[...]` and `{...}` that do not form a valid expression never become query constraints.
 - `glob` limits either search to matching paths, or lists them when it is the only argument. Searches filter by the glob through the native glob listing, so `?`, character classes, braces and spaces in a file path all work. Globs keep the index's own meaning: one without a `/` that starts with `*` matches file names at any depth, any other glob matches the path relative to the working directory, so use `**/` to reach nested files.
-- Content search is literal only: this native index has no entry point for a raw regular expression. Use `bash` with `rg` for a regex.
 - A content pattern cannot contain a newline: the native matcher searches line by line. `context` adds lines around each match (default 2, capped at 10); `limit` bounds the items returned (default 30, capped at 100).
 
 `details` is a `SearchResult` from `types.ts`: `kind` is `files` or `content`, `items` carry a relative `path` and, for content, `line`, `text` and `before`/`after` context, `total` counts matches and `more` counts those beyond the returned page. For files both are exact. The native matcher counts only the matches it returns, so for content `total` is the number returned, and `more` is 1 only after the search actually found one further match — never inferred from the native cursor, which only says files are unscanned. A full content total would mean scanning every file on every search. The tool text says the same in words (`n more files`, `more matches than shown`).
@@ -18,4 +17,4 @@ Search is read-only: finders are created without frecency or history databases a
 
 The native binary comes from the platform package of `@ff-labs/fff-node` 0.11.0, pinned exactly in `package.json`; it supports macOS, Linux and Windows on x64 and arm64. On a platform without a binary, `FileFinder.create` throws and the tool returns that error.
 
-Tests in `test/search.test.ts` search a temporary directory in-process with the real native library, covering file, glob and literal content search, patterns the native query parser would otherwise rewrite, argument validation and limits, proven-more counts, index reuse across calls, idle release and release on unload.
+Tests in `test/search.test.ts` search a temporary directory in-process with the real native library, covering file, glob, literal and regular-expression content search, patterns the native query parser would otherwise rewrite, argument validation and limits, proven-more counts, index reuse across calls, idle release and release on unload.

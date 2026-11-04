@@ -4,6 +4,9 @@ import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
 import { expect, it } from 'vitest'
 import { git } from '../lib/git.ts'
 import { Workspaces } from '../extensions/workspaces/workspaces.ts'
+import { SubmissionLanded } from '../extensions/workspaces/refs.ts'
+import { Committed } from '../extensions/coding-tools/refs.ts'
+import { emit } from '../server/events.ts'
 import { context } from '../server/harness.ts'
 import { fauxServer, post, removeTemp, temp } from './helpers.ts'
 
@@ -61,6 +64,57 @@ it('shows a landed branch as its landing range once its ref is gone, and moves o
       spec: 'uncommitted',
       kind: 'uncommitted',
     })
+
+    const target = (await post(server, '/api/conversations', { title: 'Commit owner' })).data.id
+    const rebaser = (await post(server, '/api/conversations', { title: 'Rebaser' })).data.id
+    const repo = await git(project, 'rev-parse', '--show-toplevel')
+    await server.harness.commit(async (tx) => {
+      await emit(tx, Committed, {
+        conversation: target,
+        sha: 'e'.repeat(40),
+        parents: [],
+        repo,
+        branch: 'main',
+        subject: 'first',
+      })
+      await emit(tx, Committed, {
+        conversation: rebaser,
+        sha: base,
+        parents: [],
+        repo,
+        branch: 'main',
+        subject: 'first',
+        rewrittenFrom: 'e'.repeat(40),
+      })
+      await emit(tx, SubmissionLanded, {
+        submission: 's1',
+        conversationId: target,
+        at: 1,
+        sha: tip,
+        base,
+        target: 'main',
+        lander: 3,
+        divergence: 'None',
+        title: 'Commit owner',
+        commits: [{ sha: tip, subject: 'add feature' }],
+        commitCount: 1,
+        paths: ['feature.txt'],
+      })
+      for (let index = 0; index < 200; index++)
+        await emit(tx, Committed, {
+          conversation: target,
+          sha: 'f'.repeat(40),
+          parents: [],
+          repo,
+          branch: 'main',
+          subject: 'Unrelated commit',
+        })
+    }, context)
+    for (const spec of [base.slice(0, 8), tip, `${base}...${tip}`])
+      expect(
+        (await post(server, '/api/extensions/review/actions/recipient', { args: { spec } })).data
+          .result,
+      ).toEqual({ conversation: target })
   } finally {
     await server.close()
     await removeTemp(home)

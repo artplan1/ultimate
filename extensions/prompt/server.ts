@@ -19,6 +19,8 @@ import { discoverAgents } from '../../lib/agents.ts'
 import { git } from '../../lib/git.ts'
 import { shortTitle } from '../../lib/title.ts'
 import { Standing } from '../subagents/api.ts'
+import { Committed } from '../coding-tools/api.ts'
+import { SubmissionLanded } from '../workspaces/api.ts'
 import type { BuildNote, Landing } from './refs.ts'
 
 export const order = -100
@@ -61,14 +63,15 @@ export function buildNote(
 
 /**
  * The landings in the clone from commit `from` to `to`, newest first: one row per branch, named by its title, else by
- * its newest commit's subject. A commit names its conversation by trailer, a lander merge in its subject; a
- * subagent's commit counts for the branch that owns it. A commit made outside Ultimate is a row of its own.
+ * its newest commit's subject. Historical public IDs and private commit/landing records name the conversation;
+ * a subagent's commit counts for the branch that owns it. An unrecorded commit is a row of its own.
  */
 export async function landings(
   cwd: string,
   from: string,
   to: string,
   conversations: ConversationSummary[],
+  eventLog: Pick<ExtensionHost['eventLog'], 'recent'>,
 ): Promise<Landing[]> {
   const log = await git(
     cwd,
@@ -79,12 +82,66 @@ export async function landings(
     '--format=%H%x00%s%x00%(trailers:key=Ultimate-Conversation,valueonly)%x1e',
     `${from}..${to}`,
   )
+  const records = log
+    .split('\x1e')
+    .map((record) => record.trim().split('\0'))
+    .filter(([sha]) => sha)
+  const unlinked = new Set(
+    records
+      .filter(
+        ([, subject, trailer]) => !Number(trailer?.trim()) && !/ from #(\d+) into /.test(subject),
+      )
+      .map(([sha]) => sha),
+  )
+  const owners = new Map<string, number>()
+  const rewritten = new Map<string, string>()
+  if (unlinked.size) {
+    const repo = await git(cwd, 'rev-parse', '--show-toplevel')
+    for (let before: number | undefined; unlinked.size;) {
+      const page = await eventLog.recent({
+        events: [Committed, SubmissionLanded],
+        before,
+        limit: 200,
+      })
+      for (const event of page) {
+        if (!unlinked.has(event.data.sha)) continue
+        if (Committed.is(event) && event.data.repo !== repo && event.data.worktree !== repo)
+          continue
+        const owner = Committed.is(event)
+          ? event.data.conversation
+          : SubmissionLanded.is(event)
+            ? event.data.conversationId
+            : undefined
+        if (owner === undefined) continue
+        owners.set(event.data.sha, owner)
+        unlinked.delete(event.data.sha)
+        if (
+          Committed.is(event) &&
+          event.data.rewrittenFrom &&
+          event.data.rewrittenFrom !== event.data.sha
+        ) {
+          rewritten.set(event.data.sha, event.data.rewrittenFrom)
+          if (!owners.has(event.data.rewrittenFrom)) unlinked.add(event.data.rewrittenFrom)
+        }
+      }
+      if (page.length < 200) break
+      before = page.at(-1)!.id
+    }
+  }
   const byId = new Map(conversations.map((conversation) => [conversation.id, conversation]))
   const rows = new Map<string, Landing>()
-  for (const record of log.split('\x1e')) {
-    const [sha, subject, trailer] = record.trim().split('\0')
-    if (!sha) continue
-    let id = Number(trailer?.trim()) || Number(/ from #(\d+) into /.exec(subject)?.[1]) || undefined
+  for (const [sha, subject, trailer] of records) {
+    const historical = Number(trailer?.trim()) || Number(/ from #(\d+) into /.exec(subject)?.[1])
+    let id = historical || owners.get(sha)
+    const followed = new Set([sha])
+    for (
+      let original = historical ? undefined : rewritten.get(sha);
+      original && !followed.has(original);
+      original = rewritten.get(original)
+    ) {
+      followed.add(original)
+      id = owners.get(original) ?? id
+    }
     // An owned conversation (a worker, a designer) worked for its owner's branch.
     for (let owner = id && byId.get(id)?.parentConversationId; owner;) {
       id = owner
@@ -232,6 +289,7 @@ export default function prompt(host: ExtensionHost) {
                 seen.head,
                 head,
                 host.conversations(),
+                host.eventLog,
               ).catch(
                 // A seen commit no longer in the clone (history rewritten) names nothing.
                 () => [],

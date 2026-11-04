@@ -46,6 +46,6 @@ Actions (`refs.ts`):
 - `ranges` → recent specs: uncommitted, open `ultimate/*` branches with their conversation, the last ten landings
   (`workspaces.landed` events) and the last fifteen commits; branches and landings carry their `conversation`.
 - `recipient { spec }` → `{ conversation }`: a `branch:` spec's worktree owner, a landing range's submitter (by its
-  tip in `workspaces.landed`), a commit's `Ultimate-Conversation` trailer, else the primary agent.
+  tip in `workspaces.landed`), a commit's historical `Ultimate-Conversation` trailer or private `coding-tools.committed`/`workspaces.landed` record, else the primary agent. Private owner lookup pages the event log rather than limiting ownership to recent events, following recorded `rewrittenFrom` links to the original owner when available.
 - `send { conversation, spec, comments, note? }` (user only) → `{ conversation }`. At most 50 comments, each text up
   to 4,000 characters and excerpt up to 40 lines and 8 KB, to an existing conversation; it steers a busy one.

@@ -9,6 +9,7 @@ import { git, isolatable } from '../../lib/git.ts'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { SubagentsApi } from '../subagents/api.ts'
 import { SubmissionLanded, WorkspacesApi } from '../workspaces/api.ts'
+import { Committed } from '../coding-tools/api.ts'
 import { checkReview, reviewText } from './comments.ts'
 import type { ReviewComments } from './comments.ts'
 import { reviewDiff } from './diff.ts'
@@ -150,6 +151,33 @@ const known = (host: ExtensionHost, id: number) =>
 
 /** Who a review of `spec` goes to unless the user picks another: see `RecipientAction`. */
 async function recipient(host: ExtensionHost, spec: string): Promise<number> {
+  const recorded = async (sha: string, landingOnly: boolean) => {
+    const repo = await git(host.projectRoot, 'rev-parse', '--show-toplevel')
+    const followed = new Set<string>()
+    let recordedOwner: number | undefined
+    for (let before: number | undefined; ;) {
+      const page = await host.eventLog.recent({
+        events: landingOnly ? [SubmissionLanded] : [Committed, SubmissionLanded],
+        before,
+        limit: 200,
+      })
+      for (const event of page) {
+        if (event.data.sha !== sha) continue
+        if (SubmissionLanded.is(event)) return event.data.conversationId
+        if (Committed.is(event) && (event.data.repo === repo || event.data.worktree === repo)) {
+          recordedOwner = event.data.conversation
+          followed.add(sha)
+          if (event.data.rewrittenFrom && !followed.has(event.data.rewrittenFrom)) {
+            sha = event.data.rewrittenFrom
+            continue
+          }
+          return recordedOwner
+        }
+      }
+      if (page.length < 200) return recordedOwner
+      before = page.at(-1)!.id
+    }
+  }
   const owner = async () => {
     const worktree = worktreeOf(spec)
     if (worktree !== undefined) return worktree
@@ -160,7 +188,6 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
     }
     const range = /^[^.]+\.\.\.([^.]+)$/.exec(spec)
     if (range) {
-      const landings = await host.eventLog.recent({ events: [SubmissionLanded], limit: 200 })
       const sha = await git(
         host.projectRoot,
         'rev-parse',
@@ -169,7 +196,7 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
         '--end-of-options',
         `${range[1]}^{commit}`,
       )
-      return landings.find(({ data }) => data.sha === sha)?.data.conversationId
+      return recorded(sha, true)
     }
     if (spec === 'uncommitted' || spec.startsWith('-')) return undefined
     const trailer = await git(
@@ -180,7 +207,17 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
       '--end-of-options',
       spec,
     )
-    return Number(trailer.split('\n')[0]) || undefined
+    const historical = Number(trailer.split('\n')[0])
+    if (historical) return historical
+    const sha = await git(
+      host.projectRoot,
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      '--end-of-options',
+      `${spec}^{commit}`,
+    )
+    return recorded(sha, false)
   }
   const found = await owner().catch(
     // An unknown ref or a missing repository has no owner: the review goes to the primary agent.

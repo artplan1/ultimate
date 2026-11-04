@@ -69,7 +69,7 @@ export const DiffAction = actionRef<{ spec: string; conversation?: number }, Rev
 export const RangesAction = actionRef<null, ReviewRange[]>('review', 'ranges')
 /**
  * `{ spec }` → the conversation a review of `spec` goes to by default: a branch's owner, a landing's submitter, the
- * conversation a commit's `Ultimate-Conversation` trailer names, else the primary agent's.
+ * conversation a commit's historical trailer or private commit/landing record names, else the primary agent's.
  */
 export const RecipientAction = actionRef<{ spec: string }, { conversation: number }>(
   'review',

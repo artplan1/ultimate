@@ -24,8 +24,10 @@ it.each([0, 1])(
       await git('init', '-b', 'main')
       await git('config', 'user.name', 'Trailer Test')
       await git('config', 'user.email', 'trailer@example.test')
+      await git('config', 'hook.ultimate-prepare-commit-msg.enabled', 'true')
       const hooks = join(cwd, '.git', 'hooks')
       const before = await readdir(hooks)
+      const configBefore = (await git('config', '--local', '--list')).stdout
       const execution: BashExecution = { command: '', cwd, env: {}, inheritEnv: true }
       prepareBash(execution, { conversationId: 34820 as ConversationId })
       const bash = (command: string) =>
@@ -61,7 +63,7 @@ it.each([0, 1])(
       await bash('git merge --no-ff branch -m merge')
       expect((await git('log', '-1', '--format=%B')).stdout).toContain('Ultimate-Conversation: 42')
       expect(await readdir(hooks)).toEqual(before)
-      expect((await git('config', '--local', '--list')).stdout).not.toContain('hook.ultimate.')
+      expect((await git('config', '--local', '--list')).stdout).toBe(configBefore)
     } finally {
       vi.unstubAllEnvs()
       await removeTemp(cwd)
@@ -77,6 +79,7 @@ it('preserves original attribution when another conversation rebases a commit', 
     await git('init', '-b', 'main')
     await git('config', 'user.name', 'Trailer Test')
     await git('config', 'user.email', 'trailer@example.test')
+    await git('config', 'hook.ultimate-prepare-commit-msg.enabled', 'true')
     await git('commit', '--allow-empty', '-m', 'base')
     await git('checkout', '-b', 'topic')
     await writeFile(join(cwd, 'topic.txt'), 'topic\n')

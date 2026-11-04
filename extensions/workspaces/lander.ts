@@ -601,7 +601,7 @@ export function createLander(
               if (
                 await merge(
                   entry.tip,
-                  `Merge ${entry.tip.slice(0, 7)} from #${entry.conversationId} into ${target}`,
+                  `Merge ${entry.tip.slice(0, 7)} into ${target}`,
                   `it conflicts with ${target} in`,
                   `Merge ${target} into your workspace, resolve, verify and submit again.`,
                 )

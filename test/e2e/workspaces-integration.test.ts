@@ -1229,8 +1229,8 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   await f.service.ready(second, context)
   const one = (await f.service.get(first, context))!
   const two = (await f.service.get(second, context))!
-  await commit(one.path, 'one.txt')
-  await commit(two.path, 'two.txt')
+  const oneTip = await commit(one.path, 'one.txt')
+  const twoTip = await commit(two.path, 'two.txt')
   await commit(f.projectRoot, 'moved.txt')
   const submittedFirst = await f.call(first, 'workspace', { action: 'submit', divergence: 'None' })
   expect(JSON.stringify(submittedFirst)).toContain('position')
@@ -1241,10 +1241,8 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   expect(reportOne).toContain('one.txt')
   expect(reportOne).toContain('Not pushed.')
   expect(reportTwo).toContain('two.txt')
-  expect(await git(f.projectRoot, 'log', '--first-parent', '--format=%s', '-3')).toMatch(
-    new RegExp(
-      `^Merge .* from #${second} into main\nMerge .* from #${first} into main\nmoved.txt$`,
-    ),
+  expect(await git(f.projectRoot, 'log', '--first-parent', '--format=%s', '-3')).toBe(
+    `Merge ${twoTip.slice(0, 7)} into main\nMerge ${oneTip.slice(0, 7)} into main\nmoved.txt`,
   )
   expect(await git(f.projectRoot, 'status', '--porcelain')).toBe('')
   for (const name of ['one.txt', 'two.txt', 'moved.txt'])
@@ -1281,7 +1279,7 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   const landedOne = firstLog.at(-1)!
   expect(landedOne).toMatchObject({ conversationId: first, outcome: 'landed' })
   expect(landedOne.commits).toEqual([
-    expect.stringContaining(`from #${first} into main`),
+    expect.stringContaining(`Merge ${oneTip.slice(0, 7)} into main`),
     expect.stringContaining('one.txt'),
   ])
   expect(landedOne.paths).toContain('one.txt')

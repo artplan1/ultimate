@@ -33,7 +33,7 @@ A project is a forest of conversation trees, like commit histories.
   labels it `branch · coordinator`. A branch plans, decides and verifies; subagents are for bounded execution and
   reconnaissance, and the lander is the final gate on main.
 - **Zoom out when you need to.** Read any root or sibling with codemode `ultimate.entries(id)` and
-  `ultimate.search()`; commits name the conversation that made them (`Ultimate-Conversation` trailer).
+  `ultimate.search()`.
 - **Talk across the tree without waking anyone.** `note` leaves context in another conversation for its next turn;
   `notify` tells you when another conversation finishes. Resuming a branch brings a catch-up of its tree's tally
   (older updates collapse when needed), then new target commits, overlaps first.
@@ -90,7 +90,7 @@ see [integration details](docs/worktrees.md#standing-permission-to-push-this-rep
 
 ## Conventions
 
-- Commits made through Ultimate's bash tool carry `Ultimate-Conversation: <id>`; find the conversation behind a commit with `git log --format=%(trailers:key=Ultimate-Conversation)`.
+- Keep local conversation/thread IDs out of new commit messages and GitHub PR titles, bodies and comments. Commit provenance stays in Ultimate's private events, not public Git metadata.
 - Pi is the role model: minimal, readable, malleable. Prefer platform features and existing dependencies; justify every
   new dependency in its commit message.
 - Public docs, READMEs, prompts, agent definitions, skills and code comments use generic names and examples ("the

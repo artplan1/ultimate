@@ -21,14 +21,17 @@ its `source` (`#conversation/entry`) is the starting point.
 
 The conversation may live in an earlier chapter: in codemode, try `ultimate.entries(id)` and then
 `ultimate.entries(id, {chapter})` for each chapter name from `ultimate.conversations` errors or the handoff.
-`ultimate.search('"branch":<id>', {chapter, kinds: ['event.lineage.branched'], full: true})` finds its
-`lineage.branched` event, stored in the root: `data.at` (the
-entry in the starter that started it), `data.intent` (the prompt's opening), and its text names the starter
-(`#<id> started by #<starter> … from #<root>/<at>`).
+`ultimate.search('"branch":<id>', {chapter, kinds: ['lineage.branched'], full: true})` finds its
+creation marker in the root. `data.at` is the fork point in the source conversation; `data.intent` is the brief
+intent. The marker text may name the starter (`#<id> started by #<starter> … from #<source>/<at>`).
+The source and starter can differ. Identify the starter from that text or branch call/result metadata;
+if it cannot be recovered, report it as unknown.
 
 ## 3. From the intent to the decision
 
-Read the starter's entries just before `at` (`ultimate.entries(starter, {before: at + 1, limit: 40, chapter})`):
+Read the identified starter's entries before the creation marker's own entry ID, not `data.at`
+(`ultimate.entries(starter, {before: marker.id, limit: 40, chapter})`). Locate its branch call and the preceding
+decision; page backward with `before` as needed:
 
 - a `pi.user` input: the user asked, quote it;
 - a question-card answer (`1a. …` lines): the user decided; name the question and the option;

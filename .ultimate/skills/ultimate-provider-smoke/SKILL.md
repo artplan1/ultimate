@@ -12,12 +12,20 @@ streaming, pinned agent models, login or fallback, and prompt caching. Spend one
 
 ## Start a preview on the configured models
 
-The setting is read when the preview starts: project settings of the host's project, then `~/.ultimate/settings.json`.
-A branch cannot edit the host's project settings, so set it in user settings and restore them right after the start:
+The setting is read when the preview starts: the host's effective project settings take precedence over its user
+settings (normally `~/.ultimate/settings.json`), then the preview-family default applies (`docs/settings.md`,
+`extensions/instance/server.ts`, `previewModelSetting`). The host's project scope, not the branch checkout's settings,
+selects the override. A user-level `null` cannot override a project-level model.
 
-1. Add `"instance": { "model": null }` to `~/.ultimate/settings.json` (create the key; keep everything else).
-2. `instance start` from your workspace. Note its URL and home.
-3. Put `~/.ultimate/settings.json` back as it was. The running preview keeps the configured models.
+1. Read those settings to identify the effective scope. If it already sets `instance.model` to `null`, leave it alone.
+   Otherwise obtain authorisation to change that scope temporarily and start the preview. A branch that cannot edit
+   host project settings must ask/report the blocker, not write an ineffective user override or substitute a server.
+2. Before any authorised edit, record the exact prior `instance.model` value or its absence, and whether `instance`
+   itself existed. Set only `instance.model` to `null`; preserve other `instance` fields and unrelated settings.
+3. `instance start` from your workspace. Record the returned instance id, URL and home.
+4. Immediately after the start attempt, including on failure, restore the recorded value or remove only the model
+   field you added. Remove a newly created `instance` object only if it is now empty; never delete a pre-existing
+   object or overwrite unrelated settings. Verify the restoration. A running preview keeps its selected models.
 
 To try a different model, set it the way a user would: an agent definition or a project setting in the checkout,
 or the composer's model picker in the preview. Logins are read from `~/.pi/agent` and Claude Code's own login, never
@@ -75,7 +83,8 @@ trace also lists background calls such as titles and summaries on `summaryModel`
 
 ## Clean up
 
-- Preview: `instance stop`, and check `~/.ultimate/settings.json` no longer has your `instance` key.
+- Preview: `instance stop` with only the id created for this test; leave pre-existing instances alone. Verify the
+  settings scope you edited has its exact prior model value or absence, with pre-existing `instance` fields intact.
 - Scratch server: `kill <supervisor pid>` (not `pkill -f`: the pattern matches your own shell), then
   `rm -rf $H $H.log`.
 

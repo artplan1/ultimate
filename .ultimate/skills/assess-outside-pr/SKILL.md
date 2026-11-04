@@ -6,7 +6,8 @@ description: Assess a pull request from outside contributors to this repository,
 # Assess an outside pull request
 
 The code is untrusted until you have read it. `CONTRIBUTING.md` decides what merges; this skill is the order of
-steps, not the policy.
+steps, not permission. Follow the current user and repository instructions: an assessment request does not authorise
+worktree changes, a trial merge or commit, a preview, `workspace submit`/push, or GitHub changes.
 
 ## 1. Read it whole, run nothing
 
@@ -25,7 +26,11 @@ Read every line of the diff before installing, building or testing anything. Loo
 
 Anything suspicious ends the assessment there: report it, without running the code.
 
-## 2. Trial merge in your worktree
+## 2. Trial merge, only if authorised
+
+Before these commands, obtain explicit user authorisation for the exact trial merge (including its merge commit),
+target branch and checkout/worktree. Use only the authorised checkout; creating a worktree or changing dependencies
+also needs authorisation. Without it, keep the assessment read-only and report the checks you could not run.
 
 ```bash
 git fetch origin pull/<n>/head:pr-<n>
@@ -39,9 +44,9 @@ conflicts with main and failing checks in the report; do not fix the author's co
 
 ## 3. Prove it once
 
-Show the behaviour it claims on a preview (`instance start`) or a supervised scratch server
-(`ultimate-provider-smoke` when it depends on the real model), never on the live host. Capture a screenshot or the
-command and its output.
+With user authorisation for that test environment, show the behaviour it claims on a preview (`instance start`) or
+a supervised scratch server (`ultimate-provider-smoke` when it depends on the real model), never on the live host.
+Otherwise report this verification as not run. Capture a screenshot or the command and its output when run.
 
 ## 4. Classify and report
 
@@ -51,9 +56,10 @@ what to say on the pull request.
 
 ## 5. Merge, if it merges
 
-After the go, keep the `--no-ff` merge from step 2 so the author's commits stay as they are (no squash, rebase or
-amend), and `workspace submit` it: the lander runs every check on the merged result and pushes. Fixes of your own go
-in separate commits after the merge.
+Hand off the checked working tree for review first. Only after the user approves submission and push to the exact
+target, keep the authorised `--no-ff` merge from step 2 so the author's commits stay as they are (no squash, rebase or
+amend), and `workspace submit` it: the lander runs every check on the merged result and pushes. Trial-merge approval
+alone does not authorise submission or further commits; fixes of your own need authorisation and separate commits.
 
 ## GitHub actions are not yours
 

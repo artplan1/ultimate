@@ -5,6 +5,7 @@ import { defineExtension } from '@earendil-works/pi-durable'
 import { describe, expect, it } from 'vitest'
 import { prepareFauxServer as prepareServer, until, post, attach } from './helpers.ts'
 import { context } from '../server/harness.ts'
+import { git } from '../lib/git.ts'
 import type { ServerEvents } from '../shared/protocol.ts'
 import { fixture, orderedSource } from './server-fixture.ts'
 
@@ -15,6 +16,28 @@ describe('server reload', () => {
     const prepared = await prepareServer({ ...options, home: join(options.home, 'second') })
     expect(prepared.host.build().id).toBe(first.id)
     await prepared.close()
+    // A changed HEAD with an unannotated commit must still place input inside beforeInput's transaction.
+    const cwd = options.ultimateRoot
+    await git(cwd, 'init', '-q')
+    const commit = async (subject: string, parent?: string) => {
+      await git(cwd, 'add', 'extensions/counter/value.ts')
+      const tree = await git(cwd, 'write-tree')
+      const sha = await git(
+        cwd,
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@t',
+        'commit-tree',
+        tree,
+        ...(parent ? ['-p', parent] : []),
+        '-m',
+        subject,
+      )
+      await git(cwd, 'update-ref', 'HEAD', sha)
+      return sha
+    }
+    const base = await commit('base')
     const stream = await attach(server)
     await post(server, '/api/conversations/1/submit', { text: 'before' })
     await server.harness.waitForIdle(context)
@@ -22,6 +45,7 @@ describe('server reload', () => {
       join(options.ultimateRoot, 'extensions/counter/value.ts'),
       "export const value = 'new'",
     )
+    const landed = await commit('counter: new value', base)
     await until(() => server.host.build().id !== first.id)
     const second = server.host.build()
     expect(second.extensions.counter).not.toBe(first.extensions.counter)
@@ -48,7 +72,7 @@ describe('server reload', () => {
     const notes = afterChange.filter((entry) => entry.kind === 'prompt.build')
     expect(notes).toHaveLength(1)
     expect(notes[0].model?.[0]?.content).toBe(
-      `Build changed: ${first.id} → ${second.id} · generation 1 · changed: extensions/counter`,
+      `Build changed: ${first.id} → ${second.id} · generation 1 · changed: extensions/counter · landed: counter: new value (${landed.slice(0, 7)})`,
     )
     const users = afterChange.filter((entry) => entry.model?.[0]?.role === 'user')
     expect(users.map((entry) => entry.kind).slice(-2)).toEqual(['prompt.build', 'pi.user'])

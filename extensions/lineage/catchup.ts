@@ -41,8 +41,9 @@ async function mainOf(
   const workspace = tx
     ? (await tx.doc(service.doc, ROOT_CONVERSATION_ID)).items[String(id)]
     : await service.get(id, ctx)
-  const cwd = workspace?.source ?? host.projectRoot
-  // A shared conversation follows the branch the project checkout is on, like a workspace's target.
+  const agent = tx ? await tx.doc(AgentDoc, id) : await host.harness().snapshot(AgentDoc, id, ctx)
+  const cwd = workspace?.source ?? agent?.cwd ?? host.projectRoot
+  // A shared conversation follows the branch its configured checkout is on, like a workspace's target.
   const target =
     workspace?.target ??
     (await git(cwd, 'symbolic-ref', '--quiet', '--short', 'HEAD').catch(() => ''))

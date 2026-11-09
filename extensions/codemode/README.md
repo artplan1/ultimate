@@ -65,6 +65,35 @@ Normal actions remain callable. This dispatch restriction is not a sandbox again
 
 Entry/search limits default to 100 and must be 1–1000. Pagination of raw entries uses the oldest returned entry ID as `before`. Other writes go through normal tools. Action side effects, like nested tool side effects, are not rolled back if the script fails or yields.
 
+## Reading history without dumping payloads
+
+Select entry kinds, roles and fields before calling `text()`, not raw entries or model objects.
+For a conversation whose visible text is appropriate to disclose:
+
+```js
+const entries = await ultimate.entries(1, { kinds: ['pi.user', 'pi.assistant'], limit: 5 })
+const rows = []
+for (const entry of entries) {
+  for (const message of entry.model) {
+    if (message.role !== 'user' && message.role !== 'assistant') continue
+    const blocks =
+      typeof message.content === 'string'
+        ? [{ type: 'text', text: message.content }]
+        : message.content
+    for (const block of blocks) {
+      if (block.type === 'text') rows.push({ id: entry.id, text: block.text.slice(0, 240) })
+      if (block.type === 'toolCall') rows.push({ id: entry.id, tool: block.name })
+    }
+  }
+}
+text(rows.slice(0, 10))
+```
+
+This omits tool-result entries and roles, images, thinking, encrypted payload fields and tool arguments/results.
+Keep only whitelisted tool metadata (names here), never full arguments, Bash commands or prompts.
+Clipping bounds output, not disclosure: even a text block can contain serialized payloads or credentials.
+If the selected messages are not known to be safe, omit `text` from the projection and output only ids and tool names.
+
 ## Durable store
 
 `store(key, value)` / `load(key)` use the conversation document `codemode.store` (rewindable, fork as-of). Values are loaded before every script. Store writes are saved only when the script finishes successfully; a yielded wait discards them. The document is exported in `docs` for SSE subscriptions.

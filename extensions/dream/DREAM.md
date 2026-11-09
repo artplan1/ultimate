@@ -112,6 +112,12 @@ and reusing the opaque cursor, without gaps or repeats; `after: head` follows li
 fields needed for the finding, never raw secrets, headers or full argument dumps. Paging respects retention; it
 cannot recover expired records or provider detail already sanitized away.
 
+Before emitting history into context, whitelist only public, user-visible assistant text and the necessary public
+fields from tool calls and results. Treat search hits as pointers: fetch the relevant entry and select that public
+projection before output, rather than returning raw search excerpts. Never dump whole entries or model objects,
+private thinking or internal reasoning, encrypted fields, raw prompts or tool payloads. This is guidance for reading
+history, not an API fix or a global privacy guarantee.
+
 `ultimate.trace` is a bounded newest sample (default 100 calls, maximum 1000), not the whole retained history.
 State the sample's filters, time window and coverage before counting failures or retries. Correlate trace/parent
 chains and conversation entries: search hits and duplicated standing-call records are not automatically separate

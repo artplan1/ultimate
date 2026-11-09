@@ -259,6 +259,40 @@ const branchFrom = async (server: Server, args: Record<string, unknown>) => {
   await (await server.harness.conversation(id, context))!.waitForIdle(context)
   return id
 }
+it('catches up a shared branch in its configured repository, not the host project', async () => {
+  const f = await catchupFixture()
+  const cwd = await temp('ultimate-lineage-foreign-')
+  repoGit(cwd, 'init', '-b', 'main')
+  repoGit(cwd, 'config', 'user.email', 'test@example.com')
+  repoGit(cwd, 'config', 'user.name', 'Test')
+  await writeFile(join(cwd, 'foreign.ts'), 'base\n')
+  repoGit(cwd, 'add', '.')
+  repoGit(cwd, 'commit', '-m', 'Foreign base')
+  const baseline = repoGit(cwd, 'rev-parse', 'HEAD')
+  const prompt = 'Work in the other repository'
+  const id = await branchFrom(f.server, { from: 1, prompt, cwd })
+  expect((await f.server.harness.snapshot(Seen, id, context))?.main).toBe(baseline)
+  await ask(f.server, id, 'Continue in the configured repository')
+  expect(f.requests[0]?.at(-1)).toBe(prompt)
+  expect(await catchups(f.server, id)).toEqual([])
+
+  repoGit(f.projectRoot, 'commit', '--allow-empty', '-m', 'Host-only change')
+  repoGit(cwd, 'commit', '--allow-empty', '-m', 'Foreign change')
+  await ask(f.server, id, 'Resume foreign work')
+  const notes = await catchups(f.server, id)
+  expect(notes).toHaveLength(1)
+  const text = (notes[0].data as { text: string }).text
+  expect(text).toContain('1 commits landed on main')
+  expect(text).toContain('Foreign change')
+  expect(text).not.toContain('Host-only change')
+  expect(f.requests.at(-1)!.slice(-2)).toEqual([text, 'Resume foreign work'])
+  expect((await f.server.harness.snapshot(Seen, id, context))?.main).toBe(
+    repoGit(cwd, 'rev-parse', 'HEAD'),
+  )
+  await ask(f.server, id, 'Resume again')
+  expect(await catchups(f.server, id)).toHaveLength(1)
+})
+
 const writeAbstract = (server: Server, id: ConversationId, text: string, title?: string) =>
   server.harness.commit(
     (tx) => abstract(tx, id, { text, at: 1, ...(title ? { title, feature: 'Tally' } : {}) }),

@@ -8,6 +8,7 @@ import { Messages, MessageSent } from './api.ts'
 import type { Question } from './api.ts'
 import type { Via } from './refs.ts'
 import { checkQuestions, gist, openQuestion } from './questions.ts'
+import { isOwed } from '../../lib/message-state.ts'
 import { UserInputEvent } from '../../shared/events.ts'
 import type { Device } from '../../shared/events.ts'
 import { resolveImages } from './images.ts'
@@ -146,30 +147,17 @@ export async function send(
     if (from !== 'user' && input.reply !== false) {
       const log = await tx.doc(Messages, ROOT_CONVERSATION_ID)
       // Only a message the agent has read is owed; one still queued is unread and gets its own turn.
-      const owed = []
-      for (const m of log.messages) {
-        if (m.to !== from || m.from !== to || !m.reply) continue
-        if (to === 'user') {
-          if (m.state === 'delivered') owed.push(m)
-        } else if (m.state === 'sent' || m.state === 'delivered') {
-          const submission = await tx.submissionByRequest(from as ConversationId, `board:${m.id}`)
-          // Placement, not delivery-task scheduling, says what this run has read. A settled run's
-          // unanswered input must still report its failure, even if its delivery task has not caught up.
-          if (submission?.status === 'placed') owed.push(m)
-        }
-      }
-      const pending = owed[0]
+      const pending = log.messages.find((m) => m.to === from && m.from === to && isOwed(m))
       // A message to the user who is owed an answer is that answer, with its questions and images.
       if (pending && to === 'user') {
         pending.state = 'answered'
         re = pending.id
       }
       // An agent messaging a sender whose message it has read and owes an answer is answering: this becomes the reply,
-      // and that message's delivery, seeing it answered, keeps the final answer local.
+      // and that message's delivery, seeing it answered, keeps the final answer local. The call's own `steer` and
+      // `reply` do not apply: an answer is one-way and returns in the reply phase.
       else if (pending) {
-        // The explicit answer ends this run, so it answers every read request from this sender.
-        // Unread, queued messages remain sent and get their own turn and answer.
-        for (const message of owed) message.state = 'answered'
+        pending.state = 'answered'
         const response = await append(tx, {
           from,
           to,

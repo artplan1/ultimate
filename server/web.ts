@@ -59,7 +59,7 @@ export async function createWeb(options: {
   watch: Watch
   /** Open browser pages: with none, a change only marks the bundle stale. */
   pages: () => number
-  /** A new bundle is current. */
+  /** A new bundle is current, or a build started or ended. */
   changed: () => void
   notice: (message: string) => void
 }) {
@@ -95,8 +95,12 @@ export async function createWeb(options: {
   let stale = !manifest || !(await fresh(manifest))
   let building: Promise<void> | undefined
   let changedFiles: string[] = []
+  /** The last build's facets left out with their errors, or the error that failed it as a whole. */
+  let left: { file: string; error: string }[] = []
+  let failed: string | undefined
   let pending = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | undefined
+  const closing = new AbortController()
 
   async function fresh(current: Manifest) {
     const facets = await webFacets(ultimateRoot, projectRoot, userHome)
@@ -155,6 +159,7 @@ export async function createWeb(options: {
           cwd: ultimateRoot,
           maxBuffer: 64 * 1024 * 1024,
           env: { ...process.env, NODE_ENV: 'production' },
+          signal: closing.signal,
         },
       )
       result = JSON.parse(stdout.trim().split('\n').at(-1)!) as WebBuildResult
@@ -166,13 +171,13 @@ export async function createWeb(options: {
           (entry) => entry.files.includes('web.tsx') && file.startsWith(entry.target + sep),
         )
       if (!facet || facet.name in broken) {
-        options.notice(
-          `The web UI did not build${file ? ` (${relative(ultimateRoot, file)})` : ''}: ${result.error.message}`,
-        )
+        failed = `The web UI did not build${file ? ` (${relative(ultimateRoot, file)})` : ''}: ${result.error.message}`
+        options.notice(failed)
         return
       }
       broken[facet.name] = result.error.message
       brokenFolders.push(facet.target)
+      left.push({ file: join(facet.path, 'web.tsx'), error: result.error.message })
       options.notice(`${join(facet.path, 'web.tsx')} did not build: ${result.error.message}`)
     }
     // Every file's name and content: a facet's own chunk or a public file changes without index.html changing.
@@ -226,7 +231,6 @@ export async function createWeb(options: {
     for (const name of await readdir(folder))
       if (name !== id && !name.startsWith('.') && name !== 'manifest.json' && !retired.has(name))
         await rm(join(folder, name), { recursive: true, force: true })
-    if (switched) options.changed()
   }
 
   /** Build while stale, one build at a time; changes during a build build again after it. */
@@ -234,18 +238,25 @@ export async function createWeb(options: {
     building ??= (async () => {
       try {
         await mkdir(folder, { recursive: true })
-        while (stale) {
+        while (stale && !closing.signal.aborted) {
           stale = false
           changedFiles = [...pending]
           pending = new Set()
+          left = []
+          failed = undefined
+          options.changed()
           try {
             await buildOnce()
           } catch (error) {
-            options.notice(`The web UI did not build: ${String(error)}`)
+            if (!closing.signal.aborted) {
+              failed = `The web UI did not build: ${String(error)}`
+              options.notice(failed)
+            }
           }
         }
       } finally {
         building = undefined
+        options.changed()
       }
     })()
     return building
@@ -301,7 +312,13 @@ export async function createWeb(options: {
   }
 
   return {
-    info: () => ({ id: manifest?.id ?? '', changed: changedFiles }),
+    info: () => ({
+      id: manifest?.id ?? '',
+      changed: changedFiles,
+      ...(building ? { building: true } : {}),
+      ...(left.length ? { left } : {}),
+      ...(failed ? { error: failed } : {}),
+    }),
     /** The facets the bundle's loader map holds, by web.tsx path, as the next build will see them. */
     facets: () => webFacets(ultimateRoot, projectRoot, userHome),
     /** Rebuild now when a page is open, else at the next page load; settles once applied. */
@@ -364,6 +381,8 @@ export async function createWeb(options: {
     close() {
       clearTimeout(timer)
       unwatch()
+      // A build no one will be served: stop it rather than wait for it.
+      closing.abort()
       return building
     },
   }

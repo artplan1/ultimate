@@ -76,9 +76,9 @@ it('preserves browser fill and typed tool enum schemas in provider payloads', as
         description: '[selector, value]',
       },
     )
+    // Moonshot rejects an enum without a type (PR #79); strEnum() in lib/schema.ts declares it.
     const screenshotSchema = schemas.find((tool) => tool.name === 'screenshot')!.parameters
     const subagentSchema = schemas.find((tool) => tool.name === 'subagent')!.parameters
-    // The observed Moonshot errors named these four properties: "type is not defined".
     expect(screenshotSchema).toHaveProperty('properties.theme.type', 'string')
     for (const field of ['action', 'thinking', 'isolate']) {
       expect(subagentSchema).toHaveProperty(`properties.${field}.type`, 'string')

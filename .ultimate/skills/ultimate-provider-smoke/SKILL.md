@@ -83,8 +83,7 @@ trace also lists background calls such as titles and summaries on `summaryModel`
 
 ## Clean up
 
-- Preview: `instance stop` with only the id created for this test; leave pre-existing instances alone. Verify the
-  settings scope you edited has its exact prior model value or absence, with pre-existing `instance` fields intact.
+- Preview: `instance stop`, and check `~/.ultimate/settings.json` is back as it was (step 3).
 - Scratch server: `kill <supervisor pid>` (not `pkill -f`: the pattern matches your own shell), then
   `rm -rf $H $H.log`.
 

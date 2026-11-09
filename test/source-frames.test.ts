@@ -44,6 +44,32 @@ it('maps bundled frames to their source files and keeps the rest', async () => {
   ])
 })
 
+it('leaves a frame as-is when its source map is HTML and still maps the rest', async () => {
+  const html = '<!doctype html><html><body>not a map</body></html>'
+  const spa = 'page()\n//# sourceMappingURL=spa.js.map\n'
+  const stack = [
+    'Error: x',
+    '    at Crash (http://host/assets/web-1.js:1:17)',
+    '    at Page (http://host/assets/spa.js:1:1)',
+    '    at Page (http://host/assets/spa.js:1:1)',
+  ].join('\n')
+  const source = await sourceFrames(stack, async (url) => {
+    if (url === 'http://host/assets/web-1.js') return script
+    if (url === 'http://host/assets/web-1.js.map') return map
+    if (url === 'http://host/assets/spa.js') return spa
+    if (url === 'http://host/assets/spa.js.map') return html
+    return undefined
+  })
+  expect(source).toBe(
+    [
+      'Error: x',
+      '    at Crash (/repo/extensions/a/web.tsx:3:9)',
+      '    at Page (http://host/assets/spa.js:1:1)',
+      '    at Page (http://host/assets/spa.js:1:1)',
+    ].join('\n'),
+  )
+})
+
 afterEach(() => vi.unstubAllGlobals())
 
 it("fetches only its own origin's bundle assets", async () => {

@@ -19,7 +19,13 @@ export async function sourceFrames(
       map = read(script).then(async (code) => {
         const url = code && /\/\/# sourceMappingURL=(\S+)\s*$/.exec(code)?.[1]
         const json = url && (await read(new URL(url, script).href))
-        return json ? new TraceMap(json) : undefined
+        if (!json) return undefined
+        try {
+          return new TraceMap(json)
+        } catch {
+          // A SPA fallback can serve HTML as the map (200). TraceMap throws, and the cached rejection would drop every frame.
+          return undefined
+        }
       })
       maps.set(script, map)
     }

@@ -403,11 +403,7 @@ it('an explicit answer settles the first read request; a queued follow-up gets i
   const log = (await f.log())!.messages
   // Upstream isOwed settles only the first delivered message. A second request already
   // read in the same run is not marked answered, so its delivery records it failed.
-  expect(log.filter((m) => m.reply).map((m) => m.state)).toEqual([
-    'answered',
-    'failed',
-    'answered',
-  ])
+  expect(log.filter((m) => m.reply).map((m) => m.state)).toEqual(['answered', 'failed', 'answered'])
   expect((await replies(f)).map((e) => e.data)).toEqual([
     expect.objectContaining({ text: 'Ready', failed: false }),
     expect.objectContaining({

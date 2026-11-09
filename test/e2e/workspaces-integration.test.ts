@@ -1235,8 +1235,8 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   await f.service.ready(second, context)
   const one = (await f.service.get(first, context))!
   const two = (await f.service.get(second, context))!
-  const oneTip = await commit(one.path, 'one.txt')
-  const twoTip = await commit(two.path, 'two.txt')
+  await commit(one.path, 'one.txt')
+  await commit(two.path, 'two.txt')
   await commit(f.projectRoot, 'moved.txt')
   const submittedFirst = await f.call(first, 'workspace', { action: 'submit', divergence: 'None' })
   expect(JSON.stringify(submittedFirst)).toContain('position')

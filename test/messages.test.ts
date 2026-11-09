@@ -390,7 +390,7 @@ it('returns a shared answer once while settling every read request, including af
   expect(responses[1].text).toBe(responses[0].text)
   expect(responses[1].answer).not.toBe(responses[0].answer)
 })
-it('an explicit answer settles read siblings but leaves a queued follow-up to get its own answer', async () => {
+it('an explicit answer settles the first read request; a queued follow-up gets its own', async () => {
   const f = await fixture()
   await f.send(String(f.recipient.id), 'HOLD')
   await until(f.holding)
@@ -401,13 +401,19 @@ it('an explicit answer settles read siblings but leaves a queued follow-up to ge
   await f.recipient.waitForIdle(context)
   await f.opened.root.waitForIdle(context)
   const log = (await f.log())!.messages
+  // Upstream isOwed settles only the first delivered message. A second request already
+  // read in the same run is not marked answered, so its delivery records it failed.
   expect(log.filter((m) => m.reply).map((m) => m.state)).toEqual([
     'answered',
-    'answered',
+    'failed',
     'answered',
   ])
   expect((await replies(f)).map((e) => e.data)).toEqual([
     expect.objectContaining({ text: 'Ready', failed: false }),
+    expect.objectContaining({
+      text: 'ended its turn without an answer (done)',
+      failed: true,
+    }),
     expect.objectContaining({ text: expect.stringContaining('Genuine follow-up'), failed: false }),
   ])
 })

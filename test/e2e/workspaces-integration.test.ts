@@ -1247,8 +1247,10 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   expect(reportOne).toContain('one.txt')
   expect(reportOne).toContain('Not pushed.')
   expect(reportTwo).toContain('two.txt')
-  expect(await git(f.projectRoot, 'log', '--first-parent', '--format=%s', '-3')).toBe(
-    `Merge ${twoTip.slice(0, 7)} into main\nMerge ${oneTip.slice(0, 7)} into main\nmoved.txt`,
+  expect(await git(f.projectRoot, 'log', '--first-parent', '--format=%s', '-3')).toMatch(
+    new RegExp(
+      `^Merge .* from #${second} into main\nMerge .* from #${first} into main\nmoved.txt$`,
+    ),
   )
   expect(
     await git(
@@ -1294,7 +1296,7 @@ it.concurrent('lands two submissions in order onto a moved target and reports bo
   const landedOne = firstLog.at(-1)!
   expect(landedOne).toMatchObject({ conversationId: first, outcome: 'landed' })
   expect(landedOne.commits).toEqual([
-    expect.stringContaining(`Merge ${oneTip.slice(0, 7)} into main`),
+    expect.stringContaining(`from #${first} into main`),
     expect.stringContaining('one.txt'),
   ])
   expect(landedOne.paths).toContain('one.txt')

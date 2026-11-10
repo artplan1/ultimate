@@ -1,6 +1,6 @@
 import type { Context } from '@earendil-works/chord'
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context'
-import { defineEntry, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
+import { AgentDoc, defineEntry, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
 import type { ConversationId } from '@earendil-works/pi-durable'
 import { implementAction } from '../../lib/actions.ts'
 import { formatAgo } from '../../lib/ago.ts'
@@ -22,23 +22,42 @@ export const ReviewCommentsEntry = defineEntry<ReviewComments>('review.comments'
 const index = (host: ExtensionHost, ctx: Context) =>
   host.harness().snapshot(host.need(WorkspacesApi).doc, ROOT_CONVERSATION_ID, ctx)
 
-/** Conversation `id`'s worktree while it is ready, else the project's checkout (also once it was released). */
-async function where(host: ExtensionHost, id: unknown) {
-  if (id === undefined) return host.projectRoot
-  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1)
+/** A conversation argument, checked: `undefined` for a caller that passed none. */
+function conversationOf(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)
     throw new Error('conversation must be a conversation id')
-  const workspace = (await index(host, context))?.items[String(id)]
-  return workspace?.state === 'ready' ? workspace.path : host.projectRoot
+  return value
 }
 
-/** The branch `branch` lands on: its worktree's target, else the project checkout's branch. */
-async function target(host: ExtensionHost, branch: string) {
+/**
+ * The checkout conversation `id` works in: its ready worktree, else the repository that worktree branched from, else
+ * its own cwd, else the project's checkout. The same rule as lineage's catch-up: a project root that is no repository
+ * of its own keeps its work in subfolder repositories, and Review has to follow the conversation into them.
+ */
+async function checkout(host: ExtensionHost, conversation?: number) {
+  if (conversation === undefined) return host.projectRoot
+  const workspace = (await index(host, context))?.items[String(conversation)]
+  if (workspace?.state === 'ready') return workspace.path
+  if (workspace?.source) return workspace.source
+  const agent = await host.harness().snapshot(AgentDoc, conversation as ConversationId, context)
+  return agent?.cwd || host.projectRoot
+}
+
+/** The branch `branch` lands on: its worktree's target, else the project's checkout, else the branch `cwd` is on. */
+async function target(host: ExtensionHost, branch: string, cwd: string) {
   const items = Object.values((await index(host, context))?.items ?? {})
   const owned = items.find((item) => item.branch === branch)
   if (owned) return owned.target
-  const checkout = await isolatable(host.projectRoot)
-  if ('reason' in checkout) throw new Error(checkout.reason)
-  return checkout.target
+  const project = await isolatable(host.projectRoot)
+  if (!('reason' in project)) return project.target
+  // A project root outside Git: what branches land on is the branch of the conversation's own checkout.
+  const on = await git(cwd, 'symbolic-ref', '--quiet', '--short', 'HEAD').catch(
+    // Outside a repository, or on a detached HEAD, there is no branch here to land on.
+    () => '',
+  )
+  if (on) return on
+  throw new Error(project.reason)
 }
 
 /**
@@ -77,8 +96,8 @@ async function resolve(host: ExtensionHost, cwd: string, spec: string) {
 /** A git or landing time in seconds, as the range list shows it. */
 const ago = (seconds: number) => formatAgo(seconds * 1000)
 
-async function ranges(host: ExtensionHost): Promise<ReviewRange[]> {
-  const cwd = host.projectRoot
+async function ranges(host: ExtensionHost, conversation?: number): Promise<ReviewRange[]> {
+  const cwd = await checkout(host, conversation)
   const items = Object.entries((await index(host, context))?.items ?? {})
   const titles = new Map(host.conversations().map((item) => [item.id, item.title]))
   const owner = new Map(
@@ -150,9 +169,9 @@ const known = (host: ExtensionHost, id: number) =>
   host.conversations().some((conversation) => conversation.id === id)
 
 /** Who a review of `spec` goes to unless the user picks another: see `RecipientAction`. */
-async function recipient(host: ExtensionHost, spec: string): Promise<number> {
+async function recipient(host: ExtensionHost, spec: string, cwd: string): Promise<number> {
   const recorded = async (sha: string, landingOnly: boolean) => {
-    const repo = await git(host.projectRoot, 'rev-parse', '--show-toplevel')
+    const repo = await git(cwd, 'rev-parse', '--show-toplevel')
     const followed = new Set<string>()
     let recordedOwner: number | undefined
     for (let before: number | undefined; ;) {
@@ -189,7 +208,7 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
     const range = /^[^.]+\.\.\.([^.]+)$/.exec(spec)
     if (range) {
       const sha = await git(
-        host.projectRoot,
+        cwd,
         'rev-parse',
         '--verify',
         '--quiet',
@@ -200,7 +219,7 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
     }
     if (spec === 'uncommitted' || spec.startsWith('-')) return undefined
     const trailer = await git(
-      host.projectRoot,
+      cwd,
       'log',
       '-1',
       '--format=%(trailers:key=Ultimate-Conversation,valueonly)',
@@ -210,7 +229,7 @@ async function recipient(host: ExtensionHost, spec: string): Promise<number> {
     const historical = Number(trailer.split('\n')[0])
     if (historical) return historical
     const sha = await git(
-      host.projectRoot,
+      cwd,
       'rev-parse',
       '--verify',
       '--quiet',
@@ -235,11 +254,11 @@ export const actions = {
     if (typeof input.spec !== 'string') throw new Error('Expected { spec }')
     // `uncommitted:<id>` names a worktree's uncommitted changes: the same diff, run in that checkout.
     const worktree = worktreeOf(input.spec)
-    const cwd = await where(host, worktree ?? input.conversation)
+    const cwd = await checkout(host, worktree ?? conversationOf(input.conversation))
     const shown =
       worktree === undefined ? await resolve(host, cwd, input.spec.trim()) : 'uncommitted'
     const diff = await reviewDiff(cwd, shown, {
-      target: (branch) => target(host, branch),
+      target: (branch) => target(host, branch, cwd),
       signal,
     })
     if (worktree !== undefined)
@@ -247,11 +266,15 @@ export const actions = {
     // A landed branch keeps its spec on screen, and so its drafts; one gone without a landing moves on to `shown`.
     return shown === 'uncommitted' ? diff : { ...diff, spec: input.spec }
   }),
-  ranges: implementAction(RangesAction, (_args, { host }) => ranges(host)),
+  ranges: implementAction(RangesAction, (args, { host }) => {
+    const input = args && typeof args === 'object' && !Array.isArray(args) ? args : {}
+    return ranges(host, conversationOf(input.conversation))
+  }),
   recipient: implementAction(RecipientAction, async (args, { host }) => {
-    const spec = args && typeof args === 'object' && !Array.isArray(args) ? args.spec : undefined
-    if (typeof spec !== 'string') throw new Error('Expected { spec }')
-    return { conversation: await recipient(host, spec) }
+    const input = args && typeof args === 'object' && !Array.isArray(args) ? args : {}
+    if (typeof input.spec !== 'string') throw new Error('Expected { spec }')
+    const cwd = await checkout(host, conversationOf(input.conversation))
+    return { conversation: await recipient(host, input.spec, cwd) }
   }),
   send: implementAction(SendAction, async (args, { host, device }) => {
     const id =

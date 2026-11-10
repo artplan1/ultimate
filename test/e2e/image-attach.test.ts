@@ -63,6 +63,9 @@ it('attaches an image picked with the paperclip and sends it', async () => {
     )
     .setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png })
   await page.locator('#app [data-ui="composer"] [aria-label="Remove image 1"]').waitFor()
+  // A send while a file is still read or uploaded is dropped (`send()` returns then), so press Enter only once the
+  // composer enables its Send button: the chip and the image show before their data is in.
+  await page.locator('#app [data-ui="composer"] button[aria-label="Send"]:enabled').waitFor()
   await editor.press('Enter')
   await until(async () => !!received)
   expect(received!.mimeType).toBe('image/png')
@@ -112,6 +115,8 @@ it('uploads a PDF picked with the paperclip and sends its path, not its bytes', 
     .locator('#app [data-ui="composer"] [data-ui="file-chip"]', { hasText: 'PDF' })
     .waitFor()
   await editor.fill('Summarise this')
+  // The chip shows while its upload runs, and a send then is dropped (`send()` returns while a file has no path yet).
+  await page.locator('#app [data-ui="composer"] button[aria-label="Send"]:enabled').waitFor()
   await editor.press('Enter')
   await until(async () => received !== undefined)
   const text = typeof received === 'string' ? received : JSON.stringify(received)

@@ -269,7 +269,7 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
     (tx) => configure(tx, branch, { modelTools: { add: [agentBranch] } }),
     context,
   )
-  // A user definition without a pin: the nested branch follows its initiating branch, never the root model that
+  // A user definition without a pin: model and thinking come from the tree root's agent, never the root model that
   // lost its login (rog, 2026-10-25: branches inherited the root's OpenRouter model after its login was removed).
   await f.server.harness.commit(
     (tx) =>
@@ -299,8 +299,8 @@ it.concurrent('starts a lineage branch with a message input and caller attributi
   ))!.agent(context)
   expect(overridden.instructions).toBe('Use the project procedure.')
   expect(overridden.cwd).toBe(client)
-  expect(overridden.model).toEqual(configured.model)
-  expect(overridden.thinkingLevel).toBe(configured.thinkingLevel)
+  expect(overridden.model).toEqual({ provider: 'faux', modelId: 'faux-1' })
+  expect(overridden.thinkingLevel).toBe('off')
   expect(overridden.tools.map((tool) => tool.name)).toEqual(
     configured.tools.map((tool) => tool.name).filter((name) => name !== 'debug'),
   )

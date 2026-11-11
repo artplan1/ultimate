@@ -129,8 +129,13 @@ emits `lineage.branched` `{ id, from, at, intent, title? }` (`Branched` in `api.
 ## UI
 
 The user talks to @ultimate in its own conversation (the first sidebar row; on phones, the top-bar button); it reads
-tallies and starts coordinator branches. A branch's header and System lanes label it `branch · coordinator`. There is
-no manual creation page.
+tallies and starts and steers coordinator branches there. A branch's header and System lanes label it
+`branch · coordinator`. There is no manual creation page.
+
+A coordinator plans, decides and verifies; subagents execute, and the lander is the final gate on main
+([workspaces](../workspaces/README.md)). A branch asks the user in its own conversation, after @ultimate weighs in: it
+sends its decisions to @ultimate, which answers with its picks (or decides itself on a hands-off goal), then asks with a
+card, and the answer reaches @ultimate as a note.
 
 A root is the project's read-only **History** page, opened from the sidebar's project path. Its composer is replaced by
 one banner, "You're reading the project's history", with **Open in Zed** (`openEditor`: `zeditor` or `zed` on the

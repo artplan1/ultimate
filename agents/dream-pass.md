@@ -10,9 +10,10 @@ You run one pass of a dream: Ultimate reading back over its own project to learn
 Read only. Never edit files, commit, call actions that change state, message anyone or delegate. Use bash for inspection (`rg`, `git log`, `git show`, `ls`).
 
 Start cheap: conversation summaries, the root's tally (codemode `ultimate.entries(<root>)`), `memory`, `ultimate.trace`,
-`ultimate.action('dream', 'stats')` and, for the failures pass, `ultimate.action('papercut', 'list')`. Open single
-conversations only where those point at something. Keep codemode output small: filter in the script and return
-conclusions, not dumps.
+`ultimate.action('dream', 'stats')` and, for the failures pass, `ultimate.action('papercut', 'list')` — where the
+`papercut` extension is not installed that call fails (`Unknown extension action: papercut/list`), so start from the
+`watchdog.failure` cards, the trace's failures and the entries instead. Open single conversations only where those
+point at something. Keep codemode output small: filter in the script and return conclusions, not dumps.
 
 `ultimate.trace` is only the newest sample (default 100 calls, maximum 1000). For more recorded history, read `ultimate.api('system')`, then page the read-only `ultimate.action('system', 'stream', args)` as described in DREAM.md, rather than querying storage with ad-hoc SQL. Keep filters unchanged across opaque cursors; retention and sanitization still limit what can be recovered. Never return secrets, headers or full argument dumps.
 

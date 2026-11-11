@@ -1,26 +1,21 @@
 # Ultimate
 
 Ultimate is a local coding agent with a web UI, built on Pi Durable (`@earendil-works/pi-durable`), that runs this
-repository while it edits it: you are probably reading this as Ultimate, about to change yourself. Below: how work is
-organised, and which change reloads how.
+repository while it edits it. Below: how work is organised, and which change reloads how.
 
 ## How work is organised: a forest of conversation trees
 
 - **Roots** run no turns and keep a project memory (decisions, facts, lessons by slug); a branch starts from its memory
-  index and recent landings. The root's read-only tally is the browsable project context, the **History** page, opened
-  from the sidebar's project path; the Memory row there opens Memory. One root per project: independent work goes into
-  branches. Roots and standing agents are never concluded or cleared, only compacted.
-- **Onboarding.** Start with @ultimate (Continue on Get ready, or **Set up with @ultimate** on its Start here card): it
-  writes the first memories with `remember`, and the user's answer about the project becomes instructions, kept verbatim
-  as a memory. @ultimate maintains memory with `remember` and the memory review; ⌘K Compact compacts a tally.
+  index and recent landings. Its read-only tally is the browsable project context, the **History** page, opened from
+  the sidebar's project path. One root per project: independent work goes into branches. Roots and standing agents are
+  never concluded or cleared, only compacted.
+- **Onboarding.** Start with @ultimate: it writes the first memories with `remember`, and the user's answer about the
+  project becomes instructions, kept verbatim as a memory. @ultimate maintains memory with `remember` and the memory
+  review; ⌘K Compact compacts a tally.
 - **A branch** is a feature, a fix, an experiment: @ultimate reads a root's tally and starts a coordinator branch from
   its memory brief (or its tally), then the prompt. A branch is never a subagent.
-- **Talk to @ultimate in its conversation** (first sidebar row; phones: the top-bar button): the user's standing agent
-  starts and steers branches there; conversations and roots are not created by hand.
-- **Branches ask the user in their own conversation**: a coordinator sends its decisions to @ultimate, which weighs in
-  (its picks, or deciding itself on a hands-off goal), then asks with a card; the answer reaches @ultimate as a note.
-- **Coordinators carry the work** (labelled `branch · coordinator`): a branch plans, decides and verifies; subagents
-  execute; the lander is the final gate on main.
+- **Branches ask the user through @ultimate**: a coordinator sends its decisions there, which weighs in, then asks
+  with a card; the answer comes back as a note.
 - **Across the tree**: codemode `ultimate.entries(id)`, `ultimate.search()`, `note`, `notify`; a resume brings a
   catch-up of the tally, then new target commits, overlaps first.
 - **State divergence**: reports and `workspace submit` say how the result differs from the task; "None" when it matches.
@@ -36,24 +31,15 @@ The mechanics are in [extensions/lineage/README.md](extensions/lineage/README.md
 
 ## Layers and how they reload
 
-- `extensions/<name>/web.tsx`: an extension's UI (slots, panels, surfaces, renderers, commands), rebuilt ~2 s after a
-  save, open pages switching with drafts and view kept; a broken facet shows an error card.
-- `extensions/<name>/server.ts`: agent behaviour (prompt, tools, hooks), reinstalled on save, running calls finishing on
-  the old code.
-- `extensions/<name>/api.ts`: its contract for other extensions, live with the facets that import it; `tier = 'core'` is
-  the always-on core tier ([docs](docs/extensions/core-tier.md)).
-- `lib/`: pure helpers extensions share, no state and no imports; with them.
-- `web/`: the web core (surface host, primitives, SDK, transcript, composer, palette); like a `web.tsx`.
-- `agents/`: subagent definitions; read at each use.
-- `server/`, `shared/`: core plumbing; `restart`, which boots and type-checks a new process beside the old one, which
-  survives a failure, and the run resumes there.
-- `bin/`: the supervisor; a human `pnpm start`. Keep it tiny and change it rarely.
-- Put behaviour in `extensions/`, not `server/`: it reloads without a restart. The browser bundle (`server/web.ts`,
-  [running](docs/running.md)) rebuilds in a child process, and open pages reload onto it, resuming their view and drafts.
-  A surface is a full-screen app (header, ⌘K, `mod+1…9`); a project's apps go in `<project>/.ultimate/extensions/`
+- An extension is `extensions/<name>/`: `web.tsx` (its UI), `server.ts` (agent behaviour), `api.ts`/`refs.ts`/
+  `ui.tsx` (its contracts), a README. It reloads on save, without a restart ([what reloads
+  how](docs/running.md#what-reloads-how)).
+- `lib/`: pure helpers extensions share. `web/`: the web core. `agents/`: subagent definitions, reread at every start.
+  `server/`, `shared/`: core plumbing, `restart` only; `bin/`: the supervisor, keep it tiny and change it rarely.
+- Put behaviour in `extensions/`, not `server/`.
+- A surface is a full-screen app; a project's apps go in `<project>/.ultimate/extensions/`
   ([surfaces](docs/extensions/surfaces.md)). New UI is a new extension folder, not a change to `web/`: follow
-  `write-extension` into [extensions/README.md](extensions/README.md) and copy the closest one (`status-line`,
-  `coding-tools`).
+  `write-extension` into [extensions/README.md](extensions/README.md) and copy the closest one.
 
 ## Developer reference — read when needed
 
@@ -83,25 +69,20 @@ publishing, deployments or GitHub issue/PR changes ([a rejected push](docs/workt
   every new dependency in its commit message.
 - Public docs, READMEs, prompts, agent definitions, skills and code comments use generic names and examples, never a
   real person's name, machine names, private repos or real IPs; LICENSE, attributions and real repo URLs are exempt.
-- `pnpm check` enforces import boundaries and runs `pnpm deps`, which fails on a cycle or a core-tier extension depending
-  on an optional one.
 - Plain TypeScript, ESM, Node 26, erasable syntax only (no enums, namespaces or parameter properties), relative imports
   end in `.ts`.
 - Core contracts in `shared/protocol.ts`; extension types with their extension.
 - Pin `@earendil-works/*` to exact versions; Pi Durable is experimental.
-- Tests live with what they test: an extension's in `extensions/<name>/test/` (`test/web/`, `test/e2e/`), the core's and
-  cross-extension ones in the top-level `test/` with the shared helpers; `pnpm test [path]` and `pnpm test:e2e [path]`
-  run a part. An extension's `test/` is no part of it: no reload, out of the import rules and `pnpm deps`
-  ([layout](extensions/README.md#tests)).
-- `pnpm check` (format, lint, types) and the tests covering your change pass before a commit; the lander runs every
-  suite. No real waits or spawned processes in `pnpm test` (those go to `test/e2e`), and a flaky test is fixed or
-  deleted, never skipped or given a longer timeout (`ultimate/no-test-timeout`, `ultimate/no-real-wait-in-fast-tests`, a
-  justified exception needing `fast-test-reason:`). Use the real-deadline `until` from `test/helpers.ts`, not polling
-  (`ultimate/no-local-test-polling`); `ultimate/no-retired-ui` keeps retired labels and surfaces out of extensions and
-  web code.
-- Every user-visible result is designed, not dumped: status and outcomes (a subagent report, a landing, a failure) get a
-  renderer matching the existing cards, never plain Markdown. Look at the running app and recent screenshots first, write
-  the expected look into task descriptions, and check a worker's screenshots against it.
+- Tests live with what they test: an extension's in `extensions/<name>/test/` with `test/web/` and `test/e2e/`, the
+  core's and cross-extension ones in the top-level `test/` with the shared helpers ([tests](docs/conventions.md#tests)).
+- `pnpm check` (format, lint, types; it fails on an import cycle or a core-tier extension depending on an optional one)
+  and the tests covering your change pass before a commit; the lander runs every suite. No real waits or spawned
+  processes in `pnpm test`; fix or delete a flaky test, never skip it or give it a longer timeout; wait with `until`
+  from `test/helpers.ts`, not a loop of your own; keep retired labels and surfaces out
+  ([checks and lint rules](docs/conventions.md#lint-rules)).
+- Every user-visible result is designed, not dumped: status and outcomes get a card matching the existing ones, never
+  plain Markdown; write the expected look into the task and check screenshots against it
+  ([cards](docs/conventions.md#designed-not-dumped)).
 
 ## Review quality
 

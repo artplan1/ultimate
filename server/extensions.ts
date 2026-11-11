@@ -89,8 +89,8 @@ export type ExtensionHost = Pick<
   extensions(): ExtensionInfo[]
   /** Project setup availability, the decision of the root (a linked worktree's main checkout), and capped README. */
   projectSetup(): ReturnType<typeof projectSetup>
-  /** Parsed project settings only after a local decision; otherwise empty. Invalid JSON reports a notice and returns empty. */
-  projectSettings(): Promise<JsonObject>
+  /** Parsed settings of the project at `root` (this project without it) only after a local decision; otherwise empty. Invalid JSON reports a notice and returns empty. */
+  projectSettings(root?: string): Promise<JsonObject>
   /** Read-only inventory of project folders, including replacements of active extensions. */
   projectExtensions(): Promise<ExtensionInfo[]>
   /** Remember the local/global choice and apply it through the live settings reload path. */
@@ -419,7 +419,8 @@ export async function loadExtensions(
     projects: () => projects(host.userHome, host.home),
     extensions: () => info(),
     projectSetup: () => projectSetup(host.projectRoot, host.userHome),
-    projectSettings: () => projectSettings(host.projectRoot, host.userHome, notice),
+    projectSettings: (root?: string) =>
+      projectSettings(root ?? host.projectRoot, host.userHome, notice),
     projectExtensions: async () => {
       const available = await discoverExtensions(
         host.ultimateRoot,

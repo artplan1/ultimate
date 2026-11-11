@@ -709,23 +709,37 @@ export async function loadExtensions(
   await reload()
   // A restarted Vite starts with an empty module graph, so the next change reloads every extension.
   let graphLost = false
+  /**
+   * The extension a changed file belongs to, as `<name>/<path inside it>`: by the path as given, or by its target when
+   * the watcher followed a symlinked folder and reported the file at the real path instead.
+   */
+  const locate = (file: string): string | undefined => {
+    for (const directory of directories) {
+      if (file.startsWith(directory + '/')) return file.slice(directory.length + 1)
+    }
+    for (const [name, target] of targets) {
+      if (file === target || file.startsWith(target + '/'))
+        return join(name, file.slice(target.length + 1))
+    }
+    return undefined
+  }
   // Vite owns the transitive local module graph; query-string imports do not.
   const onChange = (file: string) => {
-    if (
-      closed ||
-      ![host.ultimateRoot, host.projectRoot, ...roots.slice(1).map((root) => root.path)].some(
-        (root) => resolve(file).startsWith(root + '/'),
-      ) ||
-      file.includes('/node_modules/')
-    )
-      return
+    if (closed || file.includes('/node_modules/')) return
     if (settingsFiles.includes(resolve(file))) {
       enqueue(reloadSettings)
       return
     }
-    const directory = directories.find((root) => file.startsWith(root + '/'))
-    if (!directory && !/\.[cm]?[jt]s$/.test(file)) return
-    if (directory && inExtensionTests(file.slice(directory.length + 1))) return
+    const relative = locate(file)
+    if (
+      !relative &&
+      (![host.ultimateRoot, host.projectRoot, ...roots.slice(1).map((root) => root.path)].some(
+        (root) => resolve(file).startsWith(root + '/'),
+      ) ||
+        !/\.[cm]?[jt]s$/.test(file))
+    )
+      return
+    if (relative && inExtensionTests(relative)) return
     if (graphLost) {
       graphLost = false
       enqueue(() => reload())
@@ -747,11 +761,11 @@ export async function loadExtensions(
         }
         for (const module of modules ?? []) visit(module)
         for (const module of visited) vite.moduleGraph.invalidateModule(module)
-        const name = directory ? file.slice(directory.length + 1).split('/')[0] : undefined
+        const name = relative?.split('/')[0]
         const servers = new Set(selected)
         if (name) {
           selected.add(name)
-          if (directory && file === join(directory, name, 'server.ts')) servers.add(name)
+          if (relative === `${name}/server.ts`) servers.add(name)
         }
         await reload(selected, servers)
       } catch (error) {
@@ -762,15 +776,15 @@ export async function loadExtensions(
     })
   }
   const onStructure = (file: string) => {
-    const directory = directories.find((root) => file.startsWith(root + '/'))
-    if (!directory) return onChange(file)
-    if (inExtensionTests(file.slice(directory.length + 1))) return
+    const relative = locate(file)
+    if (!relative) return onChange(file)
+    if (inExtensionTests(relative)) return
     if (graphLost) {
       graphLost = false
       enqueue(() => reload())
       return
     }
-    const name = file.slice(directory.length + 1).split('/')[0]
+    const name = relative.split('/')[0]
     enqueue(() => reload(new Set([name]), new Set([name])))
   }
   const structure = ['add', 'unlink', 'addDir', 'unlinkDir'] as const

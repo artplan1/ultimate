@@ -54,6 +54,45 @@ it('loads a linked extension from its new target after the link is repointed and
   }
 })
 
+it("reloads a linked extension's server facet when the watcher reports a file by its real path", async () => {
+  const home = await temp()
+  const outside = await temp()
+  homes.push(home, outside)
+  const projectRoot = join(home, 'project')
+  await mkdir(projectRoot)
+  // The target sits outside every extension root, as a separate checkout does.
+  const dir = join(outside, 'linked')
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    join(dir, 'server.ts'),
+    `export const actions = { which: () => 'A' }
+export default { name: 'linked' }
+`,
+  )
+  await mkdir(join(home, '.ultimate/extensions'), { recursive: true })
+  await symlink(dir, join(home, '.ultimate/extensions/linked'))
+  const server = await fauxServer({
+    ultimateRoot: resolve('.'),
+    projectRoot,
+    userHome: home,
+    home: join(home, 'state'),
+  })
+  try {
+    const which = () => server.extensions.action('linked', 'which')?.({}, {} as never)
+    expect(await which()).toBe('A')
+    const record = () => server.extensions.info().find((entry) => entry.name === 'linked')
+    const loadedAt = record()?.server?.loadedAt
+    // Following the link, macOS reports a change inside it once, at the target's real path, which names no root and no
+    // extension directory. Nothing is written: the event a real save delivers is what the loader must place.
+    server.vite.watcher.emit('change', join(dir, 'server.ts'))
+    await until(() => !!record()?.server?.error || record()?.server?.loadedAt !== loadedAt, 15000)
+    expect(record()?.server?.error).toBeUndefined()
+    expect(await which()).toBe('A')
+  } finally {
+    await server.close()
+  }
+})
+
 it("reloads a linked extension's server facet when a file its server.ts imports changes", async () => {
   const home = await temp()
   homes.push(home)

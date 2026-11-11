@@ -1,6 +1,6 @@
 ---
 name: trace-origin
-description: Trace a file, skill, agent definition, memory or setting back to the input that created it (the user's message, a dream decision, a goal, another project's request) and explain why it exists. Use when someone asks where something came from, who asked for it, or why it was added.
+description: Trace a file, skill, agent definition, memory or setting back to the input that created it. Use when asked where it came from.
 ---
 
 # Trace where something came from

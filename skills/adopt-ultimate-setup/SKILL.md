@@ -1,6 +1,6 @@
 ---
 name: adopt-ultimate-setup
-description: Tour how Ultimate's own repository configures itself (project model families, a coordinator family, a review team of three reviewers, a lander that runs checks and pushes, worktree setup) and adopt the chosen pieces into the current project's .ultimate/, adapted. Use in onboarding step 5, or when someone asks how Ultimate is set up, wants a review team "like Ultimate's", or wants to copy its setup.
+description: "Ultimate's own repo setup: families, a review team, the lander. Use in onboarding step 5, or to adopt those pieces."
 ---
 
 # Adopt Ultimate's own setup

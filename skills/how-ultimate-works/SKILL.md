@@ -1,6 +1,6 @@
 ---
 name: how-ultimate-works
-description: Walk a new user through how to work with Ultimate in five short beats, each ending with one question card, then ask what the project is about. Use on onboarding.start (before project setup), on a walkthrough.start input, or when the user asks how Ultimate works or to be walked through it.
+description: Walk a new user through how Ultimate works. Use on onboarding.start, walkthrough.start, or when asked to be walked through it.
 ---
 
 # How Ultimate works: the walkthrough

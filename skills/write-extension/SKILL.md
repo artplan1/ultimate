@@ -1,6 +1,6 @@
 ---
 name: write-extension
-description: Build or change an Ultimate extension or surface (a panel, status-line item, tool or entry renderer, command, dialog, full-screen app, server tool or prompt section) in extensions/ or a project's .ultimate/extensions/. Use before writing a new extension folder or adding a contribution to one; not for small fixes inside an existing renderer.
+description: 'Build an extension or surface: a panel, renderer, command, tool or prompt section. Use before adding a new extension folder.'
 ---
 
 # Write an Ultimate extension

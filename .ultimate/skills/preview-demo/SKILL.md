@@ -1,6 +1,6 @@
 ---
 name: preview-demo
-description: Start, reset and stop an untouched demo preview of a worktree on a fresh recipe-list project, for the user to try a flow from the first prompt themselves. Use when a preview round needs an empty instance the user drives (not one you seeded), or the user asks to reset a demo to empty.
+description: Start, reset and stop an untouched demo preview for the user to try a flow themselves. Use when a round needs an empty demo.
 ---
 
 # Demo preview on a fresh project

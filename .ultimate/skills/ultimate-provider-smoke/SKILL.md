@@ -1,6 +1,6 @@
 ---
 name: ultimate-provider-smoke
-description: Check a change whose behaviour depends on the provider or model itself (latency, streaming of tool arguments, a pinned agent model, login or fallback, prompt caching) on the models it is meant for, with one short real turn on a preview started with `instance.model` null. Use when a normal preview cannot show it because it runs every agent on one model; fall back to a supervised scratch server only for restart, core swap or other process-level behaviour.
+description: 'Use when a change depends on the provider or model itself: latency, streaming tool arguments, login or prompt caching.'
 ---
 
 # Smoke-test the real provider

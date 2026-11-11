@@ -1,6 +1,6 @@
 ---
 name: assess-outside-pr
-description: Assess a pull request from outside contributors to this repository, decide whether it merges as a core improvement or stays open as a feature reference, and merge it through the lander when it should. Use when asked to look at, review, assess or merge a GitHub pull request on this repository that no Ultimate conversation wrote.
+description: Use when asked to assess or merge a pull request on this repository from an outside contributor, then through the lander.
 ---
 
 # Assess an outside pull request

@@ -1,6 +1,6 @@
 ---
 name: measure-switch
-description: Measure and profile how fast Ultimate's UI switches conversations, on a paused copy of the project's real database, in a real Chromium with a CDP CPU profile. Use when asked to make conversation switching, the sidebar or the transcript faster, or to check that a change did not make them slower.
+description: Profile conversation switching with a Chromium CPU profile. Use when making switching, the sidebar or the transcript faster.
 ---
 
 # Measure conversation switches on real data

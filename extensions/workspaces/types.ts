@@ -10,10 +10,11 @@ export type Workspace = {
   error?: string
   landed?: string
 }
-/** One `workspace submit`, waiting for or being processed by its source's lander. */
+/** One `workspace submit`, waiting for or being processed by its repository's lander. */
 export type QueueEntry = {
   id: string
   conversationId: number
+  /** The lander key: the repository's main checkout, whatever checkout of it the submitter works in. */
   source: string
   target: string
   tip: string
@@ -91,9 +92,9 @@ export type LanderEntry = {
 export type WorkspaceIndex = {
   items: Record<string, Workspace>
   queue: QueueEntry[]
-  /** Live lander task per source checkout. */
+  /** Live lander task per repository, by its main checkout. */
   landers: Record<string, number>
-  /** The lander conversation per source checkout, where its task runs and logs. */
+  /** The lander conversation per repository, where its task runs and logs. */
   landerConversations: Record<string, number>
   /** Outcomes of the latest submissions by id, with their target and lander conversation, for the submitter's cards. */
   results: Record<

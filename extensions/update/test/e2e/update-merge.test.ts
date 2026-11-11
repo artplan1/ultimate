@@ -20,6 +20,11 @@ const commit = (root: string, ...args: string[]) =>
 async function diverged(home: string) {
   const root = await sourceCopy(home)
   await git(root, 'init', '-q', '-b', 'main')
+  // Git runs maintenance in the background after a commit: it repacked this copy's loose objects into a pack while
+  // the `clone --bare` below was reading them, so the clone died with "failed to copy file ... No such file or
+  // directory" or "nonexistent object", at random. The repository exists for one test and never needs collecting.
+  await git(root, 'config', 'maintenance.auto', 'false')
+  await git(root, 'config', 'gc.auto', '0')
   await git(root, 'add', '-A')
   await commit(root, '-m', 'base')
   const upstream = join(home, 'upstream.git')
@@ -45,8 +50,8 @@ async function serve(home: string, ultimateRoot: string, projectRoot: string) {
   return server
 }
 
-// One test at a time: each copies the whole repository, hashes it into a fixture clone and clones that again. Three of
-// those at once starve the disk, and git fails mid-clone with "failed to copy file ... objects/xx/...".
+// One test at a time: each copies the whole repository and clones that copy again, so three at once compete for the
+// disk. diverged() disables the background object maintenance that used to fail these clones on its own.
 it('asks @ultimate once to merge origin into a diverged clone that is the project', async () => {
   const home = await temp()
   const root = await diverged(home)

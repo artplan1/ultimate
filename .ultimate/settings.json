@@ -1,10 +1,6 @@
 {
   "extensions": {
-    "disable": [
-      "agent-browser",
-      "keep-warm",
-      "imagegen"
-    ]
+    "disable": ["agent-browser", "keep-warm", "imagegen"]
   },
   "modelFamilies": {
     "families": {
@@ -27,9 +23,7 @@
   },
   "isolates": {
     "worktree": {
-      "setup": [
-        "pnpm install --frozen-lockfile --prefer-offline"
-      ]
+      "setup": ["pnpm install --frozen-lockfile --prefer-offline"]
     }
   },
   "lander": {

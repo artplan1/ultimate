@@ -126,10 +126,12 @@ it.concurrent('ships a resident Ultimate definition with valid tools; standing a
   const ultimate = await f.subagents.standing('ultimate', context)
   const agent = await (await f.server.harness.conversation(ultimate, context))!.agent(context)
   // mcp exists only while mcpServers names a server; the fixture configures none.
-  // search ships as a user extension, not a built-in, so a clone without one has
-  // no such tool and the name is ignored.
+  // search and papercut ship as user extensions, not built-ins, so a machine without
+  // them has no such tools and the names are ignored.
   expect(agent.tools.map((tool) => tool.name).toSorted()).toEqual(
-    definition.tools!.filter((name) => name !== 'mcp' && name !== 'search').toSorted(),
+    definition
+      .tools!.filter((name) => name !== 'mcp' && name !== 'search' && name !== 'papercut')
+      .toSorted(),
   )
   // debug is deferred: @ultimate names it, the root agent does not get it.
   expect(definition.tools).toContain('debug')

@@ -202,9 +202,13 @@ export default defineConfig({
     // runs one extension's.
     include: ['test/**/*.test.ts', 'extensions/*/test/**/*.test.ts'],
     exclude: ['test/e2e/**', 'extensions/*/test/e2e/**'],
-    testTimeout: 30000,
-    // A hung hook or teardown fails within seconds and names its test, instead of stalling the run.
-    hookTimeout: 5000,
+    // A fixture copies the repository and boots every extension, so the slowest tests here measured 22-27 s at a
+    // moderate load: 30 s left no room and a busy machine failed them. A hang still fails, in 60 s, and names its test.
+    testTimeout: 60_000,
+    // Closing a file's fixtures takes a Vite watcher and a server each: one file closes twelve at once, which timed out
+    // at 5 s in a full run while the same cleanup took about 2 s alone. A hung hook still fails, in 60 s, and names it.
+    hookTimeout: 60_000,
+    // Teardown is Vitest's own, not cleanup work; a stuck one should still stop the run quickly.
     teardownTimeout: 5000,
     // The heavy files each boot ten Vite-backed servers, and Vitest's default concurrency runs five of those fixtures
     // at once per worker: on a busy machine every test then takes two to four times longer and a 30 s budget that was

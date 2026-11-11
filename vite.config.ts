@@ -210,6 +210,11 @@ export default defineConfig({
     hookTimeout: 60_000,
     // Teardown is Vitest's own, not cleanup work; a stuck one should still stop the run quickly.
     teardownTimeout: 5000,
+    // The heavy files each boot ten Vite-backed servers, and Vitest's default concurrency runs five of those fixtures
+    // at once per worker: on a busy machine every test then takes two to four times longer and a 30 s budget that was
+    // never tight fails whichever heavy test is running (HazAT/ultimate#47). Files building fixtures run three at a
+    // time instead; the suite's wall time stays about the same.
+    maxConcurrency: 3,
     maxWorkers: 8,
     // Under an agent (AI_AGENT, CLAUDECODE, …) Vitest picks its minimal reporter, which prints nothing for passing
     // files; the lander's stall watchdog then stops a passing run that is silent for two minutes.

@@ -23,6 +23,7 @@ tools:
     remember,
     memory,
     todo,
+    papercut,
     goal,
     restart,
     edit,

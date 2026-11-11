@@ -66,7 +66,8 @@ On `dream.ready`, call `prepare` once:
 - `chapter`: a 2–3 word lowercase, dash-separated name drawn from what the dream learned (at most 40 characters);
 - `learned`: exactly three short lines in your own voice ("I learned…", "I keep…", "I'd like…");
 - `handoff`: a fresh handover, written now: what is open and how far each got, what landed from the dream, the
-  decisions and the user's corrections, and what to do next (Markdown, at most 12,000 characters).
+  decisions and the user's corrections, and what to do next (Markdown, at most 12,000 characters). Name the papercut
+  rows still open: their index lives with this chapter, so the next one starts without it.
 
 It puts the Fall asleep card in your conversation and pins it in the status line. Then send the user one message: what
 the chapter carries, and that the card's Fall asleep button switches when they are ready. Only they press it; never
@@ -128,7 +129,11 @@ actual defects. Name a root cause only when the evidence establishes it; an HTTP
   that later conversations taught but nobody remembered. Output add/update/delete ops, each with reason and evidence
   (the memory review in extensions/lineage/README.md). Never drop or weaken the memory about the user.
 - **failures** — what failed often: `watchdog.failure` cards, tool and action errors in the trace, retries, reactor
-  failures, lander rejections, runs the user had to stop. Group by cause; for the top ones propose a fix.
+  failures, lander rejections, runs the user had to stop. Start from the papercuts agents raised while working:
+  `ultimate.action('papercut', 'list')` gives the open rows as text and as rows, which beats searching every entry. A
+  row is a pointer to verify, not a verdict: check what actually happened in its conversation and quote it with
+  `#conversation/entry`, and drop it when the evidence does not hold. Then group what is left by cause, for the top
+  ones propose a fix, and propose closing the rows open over 30 days that never repeated.
 - **tools** — `stats` gives calls, failures, mean duration and enabled tools never called. Explain the numbers: why a
   tool fails, which are slow, which unused ones should be taught or removed, what agents did by hand that a tool
   should do.

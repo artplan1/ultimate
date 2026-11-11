@@ -34,7 +34,7 @@ Server factories receive exactly these `ExtensionHost` fields (import its type o
 - `conversations()`: every conversation's summary, as `useConversations()` gives the web; empty until the harness is open.
 - `projects()`: the user's central project homes read from their JSON manifests, never another project's SQLite; includes this home and live supervisor URLs.
 - `projectSetup()`: whether the project has `.ultimate/` setup, the decision of its root (a linked worktree's main checkout) and its capped README.
-- `projectSettings()`: the project's parsed settings, only after a local decision; otherwise empty.
+- `projectSettings(root?)`: the parsed settings of the project at `root` (this project without it), only after that project's local decision; otherwise empty.
 - `projectExtensions()`: a read-only inventory of the project's extension folders, including replacements of active extensions.
 - `setProjectDecision(local)`: remember the local/global choice and apply it through the live settings reload.
 - `reloadExtensions()`: apply settings writes to the registry, browser facets and styles before returning.

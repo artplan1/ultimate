@@ -157,7 +157,7 @@ lander's sidebar row shows the feature it lands or landed last.
 1. Resets its own detached checkout, `<home>/lander/<hash of source>`, to the target branch tip. `isolates.worktree.setup`
    runs once when the checkout is created. With `lander.push`, it fetches the remote branch and merges it when it is ahead.
 2. Merges the submitted tip. A conflict aborts the merge and reports the conflicting paths to the submitter.
-3. Runs `lander.checks` in order. Each check is stopped after 2 minutes without output or 10 minutes total, or at
+3. Runs `lander.checks` in order, the checks of the project `source` is (see Settings below). Each check is stopped after 2 minutes without output or 10 minutes total, or at
    its own `timeout` (seconds, which also caps the no-output limit), killing its whole process group. Watchdog
    failures name the limit that fired, the failed test lines seen so far (vitest's `FAIL`/`×` lines, kept even when
    they scrolled out of the tail) and the output tail, and rerun like other check failures.
@@ -186,9 +186,13 @@ lander's sidebar row shows the feature it lands or landed last.
      checkout is released. A root or standing agent refuses concluding and stays open. Any later input resumes a
      concluded branch.
 
-Settings (`.ultimate/settings.json`): `"lander": { "checks": ["pnpm check", [{ "command": "pnpm test", "timeout": 180 }, "pnpm test:e2e"]], "push": "origin" }`;
+Settings (the `.ultimate/settings.json` of the project `source` is, read once that project's setup is chosen locally):
+`"lander": { "checks": ["pnpm check", [{ "command": "pnpm test", "timeout": 180 }, "pnpm test:e2e"]], "push": "origin" }`;
 both are optional. Anything that must follow every landing (a deploy, a notification) is an automation on the
-`workspaces.landed` event.
+`workspaces.landed` event. Landing work for another repository is checked and prepared by that repository's own
+project settings, never this project's: `isolates.worktree.setup` runs the source's commands before its checks, and a
+source that configures no checks lands with none — its report says "No checks configured for this source." and the
+lander logs a `no checks configured for this source` step, instead of silently borrowing another project's checks.
 
 Each attempt starts from a reset checkout, and the integrated commit is memoized after the checks, so a crash resumes
 safely. Failed submissions are dropped from the queue after their report.

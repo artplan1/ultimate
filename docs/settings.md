@@ -44,6 +44,11 @@ recent context and start compacting in the background earlier. `compaction.model
 are read when the server starts.
 User config is independent of `ULTIMATE_HOME`. A project's `isolates.worktree` sets its checkouts' `setup` commands and, optionally, where they live (`path`) and
 how they are made and removed (`add`, `remove`); see `extensions/workspaces/README.md`.
+The lander reads `lander.checks` and `lander.push`, and the `isolates.worktree.setup` it runs before them, from the
+settings of the project a workspace's source checkout belongs to: landing a branch of another repository runs that
+project's checks and never this one's, gated by that project's own decision like every other setting. A source whose
+project configures no checks — or whose setup is not chosen locally — lands with none, and its landing report and the
+lander log say so.
 This repository's `.ultimate/settings.json` holds its isolate setup,
 lander checks and preview model.
 

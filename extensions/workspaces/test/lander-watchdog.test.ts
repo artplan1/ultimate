@@ -109,10 +109,23 @@ it('names the failed tests of a check that exits nonzero', async () => {
   )
 })
 
-const settings = (checks: unknown) =>
-  landerSettings({
-    projectSettings: async () => ({ lander: { checks } }) as never,
-  })
+const settings = (checks: unknown, source = '/source') =>
+  landerSettings({ projectSettings: async () => ({ lander: { checks } }) as never }, source)
+
+it('reads the lander settings of the source it lands for', async () => {
+  const asked: (string | undefined)[] = []
+  const read = await landerSettings(
+    {
+      projectSettings: async (root?: string) => {
+        asked.push(root)
+        return { lander: { checks: [`check in ${root}`] } }
+      },
+    },
+    '/elsewhere',
+  )
+  expect(asked).toEqual(['/elsewhere'])
+  expect(read.checks).toEqual([{ command: 'check in /elsewhere' }])
+})
 
 it('reads plain commands and commands with their own timeout from settings', async () => {
   expect(

@@ -3,6 +3,7 @@ import { cp, mkdir, readdir, readFile, writeFile, access, realpath, unlink } fro
 import { join } from 'node:path'
 import { obj } from '@earendil-works/pi-schema'
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
+import { ProjectTrustStore } from '@earendil-works/pi-coding-agent'
 import type { FauxResponseFactory } from '@earendil-works/pi-ai/providers/faux'
 import {
   defineExtension,
@@ -14,6 +15,7 @@ import { CodingTools } from '@earendil-works/pi-durable/tools'
 import type { ConversationId, JsonObject, Submission, TaskId, Tx } from '@earendil-works/pi-durable'
 import { afterAll, expect, it, vi } from 'vitest'
 import { context, prepareHarness } from '../../../../server/harness.ts'
+import { projectSettings } from '../../../../server/project-setup.ts'
 import { Metadata } from '../../../../server/metadata.ts'
 import { eventLog } from '../../../../server/events.ts'
 import { UiState } from '../../../../server/ui-state.ts'
@@ -1356,6 +1358,123 @@ it.concurrent('runs a check group concurrently and records each summary', async 
     ),
   )
   expect(checks).toHaveLength(3)
+})
+/** Project settings of any root, read as the server reads them, so these tests exercise the real resolution. */
+const realSettings = (f: Awaited<ReturnType<typeof fixture>>) => {
+  f.host.projectSettings = (root?: string) =>
+    projectSettings(root ?? f.host.projectRoot, f.directory)
+}
+/** Write project settings for `root` and, by default, choose its setup locally. */
+async function configure(
+  f: Awaited<ReturnType<typeof fixture>>,
+  root: string,
+  settings: JsonObject,
+  local = true,
+) {
+  const path = await realpath(root)
+  await mkdir(join(path, '.ultimate'), { recursive: true })
+  await writeFile(join(path, '.ultimate/settings.json'), JSON.stringify(settings))
+  if (local) new ProjectTrustStore(join(f.directory, '.ultimate')).set(path, true)
+}
+/** A second repository, the source of a workspace that is not the host project, with settings of its own. */
+async function foreignSource(
+  f: Awaited<ReturnType<typeof fixture>>,
+  settings?: JsonObject,
+  local = true,
+) {
+  const root = join(f.directory, 'foreign')
+  await mkdir(root, { recursive: true })
+  await git(root, 'init', '-b', 'main')
+  await git(root, 'config', 'user.email', 'test@example.com')
+  await git(root, 'config', 'user.name', 'Test')
+  await writeFile(join(root, 'base.txt'), 'foreign')
+  // Setup commands may write only ignored files: a checkout its checks left dirty refuses to land.
+  await writeFile(join(root, '.gitignore'), '*marker\n')
+  await git(root, 'add', '.')
+  await git(root, 'commit', '-m', 'foreign base')
+  if (settings) await configure(f, root, settings, local)
+  return realpath(root)
+}
+/** The `ultimate.lander` log of `source`'s lander conversation. */
+async function sourceLog(f: Awaited<ReturnType<typeof fixture>>, source: string) {
+  const index = (await f.opened.harness.snapshot(Workspaces, ROOT_CONVERSATION_ID, context))!
+  const id = index.landerConversations[source] as ConversationId
+  const view = await (await f.opened.harness.conversation(id, context))!.context(context)
+  return view.entries
+    .filter((entry) => entry.kind === 'ultimate.lander')
+    .map((entry) => entry.data as LanderEntry)
+}
+/** The check results in `log`, as the lander recorded them. */
+const checked = (log: LanderEntry[]) => log.flatMap((line) => (line.check ? [line.check] : []))
+/** A workspace of `source`, ready, with one committed change. */
+async function workspaceOf(f: Awaited<ReturnType<typeof fixture>>, source: string) {
+  const result = await actions.create({ cwd: source }, { host: f.host } as ActionContext)
+  // Submitting needs an entry of its conversation for the breadcrumb.
+  await f.opened.harness.commit(
+    (tx) => tx.appendEntry(result.id, { kind: 'test.submission', data: {} }),
+    context,
+  )
+  await f.service.ready(result.id, context)
+  await commit((await f.service.get(result.id, context))!.path)
+  return result.id
+}
+it.concurrent('lands with the checks and the setup of the project a workspace is sourced from', async () => {
+  const f = await fixture()
+  realSettings(f)
+  await configure(f, f.projectRoot, { lander: { checks: ['echo HOST_CHECK'] } })
+  const source = await foreignSource(f, {
+    isolates: { worktree: { setup: ['touch setup-marker'] } },
+    lander: { checks: ['test -f setup-marker', 'echo FOREIGN_CHECK'] },
+  })
+  const id = await workspaceOf(f, source)
+  await f.service.submit(id, 'None', context)
+  const [report] = await submitted(f, id)
+  expect(report).toContain('landed as')
+  expect(report).not.toContain('No checks configured')
+  expect(await readFile(join(source, 'change.txt'), 'utf8')).toBe('change.txt')
+  const log = await sourceLog(f, source)
+  // The marker exists only because the source's own setup ran first; the host project's check never ran.
+  expect(checked(log)).toEqual([
+    { command: 'test -f setup-marker', result: 'passed' },
+    { command: 'echo FOREIGN_CHECK', result: 'passed', summary: 'FOREIGN_CHECK' },
+  ])
+  const events = await f.host.eventLog.recent({ events: [CheckRan], limit: 20 })
+  // Newest first, as the log keeps them: the host project's check never ran for this source.
+  expect(events.map((event) => event.data.command).toReversed()).toEqual([
+    'test -f setup-marker',
+    'echo FOREIGN_CHECK',
+  ])
+})
+it.concurrent('lands a workspace whose source configures no checks, and says so', async () => {
+  const f = await fixture()
+  realSettings(f)
+  // Its project settings stay unread until its setup is chosen locally, as for any other project.
+  const source = await foreignSource(f, { lander: { checks: ['echo UNCHOSEN_CHECK'] } }, false)
+  const id = await workspaceOf(f, source)
+  await f.service.submit(id, 'None', context)
+  const [report] = await submitted(f, id)
+  expect(report).toContain('landed as')
+  expect(report).toContain('No checks configured for this source.')
+  expect(await readFile(join(source, 'change.txt'), 'utf8')).toBe('change.txt')
+  const log = await sourceLog(f, source)
+  expect(checked(log)).toEqual([])
+  expect(log.map((line) => line.step)).toContain('no checks configured for this source')
+  expect(await f.host.eventLog.recent({ events: [CheckRan], limit: 20 })).toEqual([])
+})
+it.concurrent('keeps running the host project’s checks for its own landings', async () => {
+  const f = await fixture()
+  realSettings(f)
+  await configure(f, f.projectRoot, { lander: { checks: ['echo HOST_CHECK'] } })
+  const id = await f.create()
+  await f.service.ready(id, context)
+  await commit((await f.service.get(id, context))!.path)
+  await f.service.submit(id, 'None', context)
+  const [report] = await submitted(f, id)
+  expect(report).toContain('landed as')
+  expect(report).not.toContain('No checks configured')
+  expect(checked(await sourceLog(f, await realpath(f.projectRoot)))).toEqual([
+    { command: 'echo HOST_CHECK', result: 'passed', summary: 'HOST_CHECK' },
+  ])
 })
 it.concurrent('reruns only the failing command of a group, reports its output twice failed, and lands a flaky one', async () => {
   const f = await lander({

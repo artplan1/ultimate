@@ -249,8 +249,16 @@ const parseCheck = (value: unknown): Check | undefined => {
   if (timeout === undefined) return { command }
   return typeof timeout === 'number' && timeout > 0 ? { command, timeout } : undefined
 }
-export const landerSettings = async (host: Pick<Host, 'projectSettings'>): Promise<Settings> => {
-  const lander = (await host.projectSettings()).lander as
+/**
+ * What the lander of `source` runs and pushes, from the settings of the project that source is: landing work for
+ * another repository must neither check nor prepare it with this project's commands. A source whose project configures
+ * nothing lands unchecked, which the report says.
+ */
+export const landerSettings = async (
+  host: Pick<Host, 'projectSettings'>,
+  source: string,
+): Promise<Settings> => {
+  const lander = (await host.projectSettings(source)).lander as
     | { checks?: unknown; push?: unknown }
     | undefined
   const entries = lander?.checks ?? []
@@ -551,9 +559,12 @@ export function createLander(
             (await realpath(source)) === (await realpath(host.ultimateRoot)) &&
             restartNeeded(landed.paths)
           return finish(
-            [summary(landed, sha), pushed.text, ...(needsRestart ? ['Needs restart.'] : [])].join(
-              '\n',
-            ),
+            [
+              summary(landed, sha),
+              ...(settings.checks.length ? [] : ['No checks configured for this source.']),
+              pushed.text,
+              ...(needsRestart ? ['Needs restart.'] : []),
+            ].join('\n'),
             {
               ...landedOutcome(landed),
               ...(pushed.remote ? { pushed: pushed.remote } : {}),
@@ -562,7 +573,7 @@ export function createLander(
           )
         }
         try {
-          const settings = await landerSettings(host)
+          const settings = await landerSettings(host, source)
           // An earlier lander task fast-forwarded this submission and then ended (a reload or fault before its push):
           // nothing to merge or check again, push exactly what landed and report that landing.
           if (
@@ -643,9 +654,12 @@ export function createLander(
               )
             }
             const { base } = merged
-            // Setup prepares the merged revision, for example installs its lockfile.
+            // Setup prepares the merged revision, for example installs its lockfile; it is the source's project that
+            // knows how to prepare a checkout of itself.
             await step('setting up')
-            await setup(source, path, await host.projectSettings(), signal)
+            await setup(source, path, await host.projectSettings(source), signal)
+            // Nothing configured means nothing runs: borrowing another project's checks would test the wrong repository.
+            if (!settings.checks.length) await step('no checks configured for this source')
             const flaky: string[] = []
             for (const [position, group] of settings.checks.entries()) {
               const members = Array.isArray(group) ? group : [group]

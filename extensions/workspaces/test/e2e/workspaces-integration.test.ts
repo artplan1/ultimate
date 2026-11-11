@@ -984,6 +984,162 @@ async function lander(
   f.host.projectSettings = async () => ({ lander: settings })
   return f
 }
+/**
+ * A checkout of the project's repository inside the fixture's folder, as a branch that works in one has: a conversation
+ * created in it records that worktree as its source.
+ */
+async function worktreeSource(f: Awaited<ReturnType<typeof fixture>>, name = 'nested') {
+  const path = join(f.directory, name)
+  await git(f.projectRoot, 'worktree', 'add', '-b', name, path)
+  const id = await f.opened.harness.commit(async (tx) => {
+    const child = await tx.createConversation({ ownership: { kind: 'ownerless' } })
+    await f.service.create(tx, child.id, path)
+    return child.id
+  }, context)
+  await f.service.ready(id, context)
+  return { path: await realpath(path), id }
+}
+it.concurrent('clears a resubmission whose tip the target already holds without running a check', async () => {
+  const f = await lander({})
+  const marker = join(f.directory, 'checks-ran')
+  f.host.projectSettings = async () => ({ lander: { checks: [`echo ran >> '${marker}'`] } })
+  const id = await f.create()
+  await f.service.ready(id, context)
+  const tip = await commit((await f.service.get(id, context))!.path, 'first.txt')
+  await f.service.submit(id, 'None', context)
+  expect((await submitted(f, id))[0]).toContain('landed as')
+  expect(await readFile(marker, 'utf8')).toBe('ran\n')
+  // The same clean tip a second time: the target holds it, so the record is cleared without the check set.
+  const again = await f.service.submit(id, 'None', context)
+  expect((await submitted(f, id))[1]).toContain(
+    'had nothing new to land on main: its tip was already there, so no checks ran.',
+  )
+  expect(await readFile(marker, 'utf8')).toBe('ran\n')
+  const index = (await f.opened.harness.snapshot(Workspaces, ROOT_CONVERSATION_ID, context))!
+  expect(index.results[again.id]).toMatchObject({ outcome: 'landed', commits: [], paths: [] })
+  expect(index.results[again.id].steps.map((row) => row.step)).toEqual([
+    'queued',
+    'started',
+    `nothing new to land: ${tip.slice(0, 7)} is already in main`,
+  ])
+  expect(
+    (await landerLog(f)).log
+      .filter((line) => line.submission === again.id)
+      .map((line) => line.step ?? line.outcome),
+  ).toEqual([
+    'queued',
+    'started',
+    `nothing new to land: ${tip.slice(0, 7)} is already in main`,
+    'landed',
+  ])
+})
+it.concurrent('lands a submit from a worktree through its repository’s lander, and another repository through its own', async () => {
+  const f = await lander({})
+  const { path, id } = await worktreeSource(f)
+  const workspace = (await f.service.get(id, context))!
+  expect(workspace.source).toBe(path)
+  await f.opened.harness.commit(
+    (tx) => tx.appendEntry(id, { kind: 'test.submission', data: {} }),
+    context,
+  )
+  await commit(workspace.path, 'nested.txt')
+  const nested = await f.service.submit(id, 'None', context)
+  expect(nested.lander).toBe((await landerLog(f)).id)
+  expect((await submitted(f, id))[0]).toContain('landed as')
+  expect(await git(f.projectRoot, 'show', 'nested:nested.txt')).toBe('nested.txt')
+  const sources = async () =>
+    Object.keys(
+      (await f.opened.harness.snapshot(Workspaces, ROOT_CONVERSATION_ID, context))!
+        .landerConversations,
+    )
+  expect(await sources()).toEqual([await realpath(f.projectRoot)])
+  // A repository of its own is not a worktree of the project's: it keeps a lander and queue of its own.
+  const other = join(f.directory, 'other')
+  await mkdir(other)
+  await git(other, 'init', '-b', 'main')
+  await git(other, 'config', 'user.email', 'test@example.com')
+  await git(other, 'config', 'user.name', 'Test')
+  await writeFile(join(other, 'base.txt'), 'other')
+  await git(other, 'add', '.')
+  await git(other, 'commit', '-m', 'other')
+  const second = await f.opened.harness.commit(async (tx) => {
+    const child = await tx.createConversation({ ownership: { kind: 'ownerless' } })
+    await f.service.create(tx, child.id, other)
+    return child.id
+  }, context)
+  await f.service.ready(second, context)
+  await f.opened.harness.commit(
+    (tx) => tx.appendEntry(second, { kind: 'test.submission', data: {} }),
+    context,
+  )
+  await commit((await f.service.get(second, context))!.path, 'other.txt')
+  const own = await f.service.submit(second, 'None', context)
+  expect(own.lander).not.toBe(nested.lander)
+  expect((await submitted(f, second))[0]).toContain('landed as')
+  expect(await readFile(join(other, 'other.txt'), 'utf8')).toBe('other.txt')
+  expect((await sources()).toSorted()).toEqual(
+    [await realpath(f.projectRoot), await realpath(other)].toSorted(),
+  )
+})
+it.concurrent('cuts a lander an earlier version stood for a worktree source and one whose checkout is gone', async () => {
+  const f = await lander({ checks: ['echo ran >&2; exit 1'] })
+  const { path, id } = await worktreeSource(f)
+  const workspace = (await f.service.get(id, context))!
+  const at = await f.opened.harness.commit(
+    async (tx) => (await tx.appendEntry(id, { kind: 'test.submission', data: {} })).id,
+    context,
+  )
+  const stale = await f.opened.harness.createConversation(
+    { ownership: { kind: 'ownerless' } },
+    context,
+  )
+  const gone = await f.opened.harness.createConversation(
+    { ownership: { kind: 'ownerless' } },
+    context,
+  )
+  const standing: [number, boolean][] = []
+  f.host.implement(
+    ConversationsApi,
+    conversations({
+      concluded: async () => new Set<ConversationId>(),
+      subject: async () => ({}),
+      setStanding: async (tx, conversation, value) => {
+        standing.push([conversation, value])
+        await setStanding(tx, conversation, value)
+      },
+    }),
+  )
+  // The document as an earlier version wrote it: a lander per source path, this one for the worktree, and the one of a
+  // worktree released since.
+  await f.opened.harness.commit(async (tx) => {
+    await setStanding(tx, stale.id, true)
+    await setStanding(tx, gone.id, true)
+    const index = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
+    index.landerConversations[path] = stale.id
+    index.landerConversations[join(f.home, 'worktrees', 'released')] = gone.id
+    index.queue.push({
+      id: `${id}-stale`,
+      conversationId: id,
+      source: path,
+      target: 'nested',
+      tip: workspace.base,
+      at,
+      divergence: 'None',
+      state: 'queued',
+      steps: [],
+    })
+  }, context)
+  await f.reopen()
+  expect((await submitted(f, id))[0]).toContain(
+    'had nothing new to land on nested: its tip was already there, so no checks ran.',
+  )
+  const index = (await f.opened.harness.snapshot(Workspaces, ROOT_CONVERSATION_ID, context))!
+  expect(Object.keys(index.landerConversations)).toEqual([await realpath(f.projectRoot)])
+  expect(Object.values(index.landerConversations)).not.toContain(stale.id)
+  expect(index.landers).toEqual({})
+  expect(standing).toContainEqual([stale.id, false])
+  expect(standing).toContainEqual([gone.id, false])
+})
 it.concurrent('lets an ownerless history fork submit its own workspace', async () => {
   const f = await lander({ checks: ['test -f base.txt'] })
   const entry = await f.opened.harness.commit(

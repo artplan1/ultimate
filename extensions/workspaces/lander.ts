@@ -486,7 +486,7 @@ export function createLander(
           [
             landed.commits.length
               ? `landed${how} as ${sha.slice(0, 7)} on ${entry.target}.`
-              : `had nothing new to land on ${entry.target}.`,
+              : `had nothing new to land on ${entry.target}: its tip was already there, so no checks ran.`,
             ...(landed.commits.length ? [`Commits:\n${landed.commits.join('\n')}`] : []),
             ...landed.flaky.map((command) => `Flaky: ${command}`),
           ].join('\n')
@@ -572,6 +572,30 @@ export function createLander(
             (await contains(source, entry.landed.sha, `refs/heads/${target}`))
           )
             return await landedReport(settings, entry.landed, entry.landed.sha)
+          // A resubmission only clears a failed record. When the target already held its tip before this submission
+          // there is nothing to merge, set up or check, so the outcome is reported at once instead of spending the whole
+          // check set on it. A submission that landed here already (`entry.landed`) or whose push was rejected once
+          // (`pushRetried`) is not a resubmission: it integrates and pushes as it did before.
+          if (
+            !entry.landed &&
+            !pushRetried &&
+            (await contains(source, entry.tip, `refs/heads/${target}`))
+          ) {
+            await step(`nothing new to land: ${entry.tip.slice(0, 7)} is already in ${target}`)
+            const sha = await git(source, 'rev-parse', `refs/heads/${target}`)
+            return await landedReport(
+              settings,
+              {
+                sha,
+                base: sha,
+                commits: [],
+                paths: [],
+                flaky: [],
+                weight: { added: 0, removed: 0, tokens: 0 },
+              },
+              sha,
+            )
+          }
           // A crash after the checks keeps the integrated commit: go straight to fast-forwarding it.
           let prepared = await runtime.memo<Prepared>(`prepared:${id}:${attempt}`, context)
           if (!prepared) {

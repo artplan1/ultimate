@@ -108,13 +108,17 @@ full log in `ultimate.lander` entries and refuses every input.
 request (new agreements, different approach or library, changed scope), or "None" when it matches. It queues a
 top-level main's clean tip in the root document's `queue` and returns its position and lander conversation at once;
 the main keeps working. The submission saves `divergence` and `at`, the submitter's latest visible entry at submit
-time, as a breadcrumb. One `workspaces.lander` task per source checkout (`landers`) processes that source's entries
-in order.
+time, as a breadcrumb. One `workspaces.lander` task per repository (`landers`) processes that repository's entries
+in order, whatever checkout of it a branch works in: a submit from a worktree joins the repository's lander and queue,
+and only a genuinely different repository gets a lander of its own.
 
-The task runs in that source's lander conversation (`landerConversations`): ownerless, titled "@lander",
-labelled `lander`, its cwd the lander checkout. The project's checkout has one from the moment the extension opens
-(idempotently, the same record submit uses); another source gets its own on its first submit. It has no workspace and
-is no main, so `workspace submit` refuses it. The task is its conversation's foreground work, so the Agents
+The task runs in that repository's lander conversation (`landerConversations`): ownerless, titled "@lander",
+labelled `lander`, its cwd the lander checkout. The repository's main checkout has one from the moment the extension
+opens (idempotently, the same record submit uses); another repository gets its own on its first submit. It has no
+workspace and is no main, so `workspace submit` refuses it. A lander an earlier version stood for a worktree source is
+cut when the extension opens: its queue moves to the repository's lander and its record goes, as does one whose
+checkout is gone with nothing queued; either conversation becomes an ordinary one again, no longer pinned, standing or
+fed work. The task is its conversation's foreground work, so the Agents
 tab shows it working while it lands. The sidebar pins every lander
 conversation above the others, never concluded, with "idle · last <sha> <time>" or a pulsing "landing". It logs
 every submission as `ultimate.lander` entries, which carry no model message, so no model run in that conversation
@@ -154,7 +158,7 @@ first lines and outcome, and the root note carry that snapshot. `landing.tsx` re
 the root's landing note; its one-line `Subject` heads each submission in the lander log and the submit card, and the
 lander's sidebar row shows the feature it lands or landed last.
 
-1. Resets its own detached checkout, `<home>/lander/<hash of source>`, to the target branch tip. `isolates.worktree.setup`
+1. Resets its own detached checkout, `<home>/lander/<hash of the repository>`, to the target branch tip. `isolates.worktree.setup`
    runs once when the checkout is created. With `lander.push`, it fetches the remote branch and merges it when it is ahead.
 2. Merges the submitted tip. A conflict aborts the merge and reports the conflicting paths to the submitter.
 3. Runs `lander.checks` in order. Each check is stopped after 2 minutes without output or 10 minutes total, or at
@@ -197,9 +201,11 @@ The fast-forward records `landed: { sha, base, commits, paths, flaky }` on the q
 workspace's `landed`. A lander task that ends after that and before its report, for example one faulted because a
 reload of this extension changed the Workspaces document, loses its memos but not that record: whichever task picks
 the entry next skips merging and checks, pushes exactly `landed.sha` when the target still contains it, and reports
-the original landing. "Nothing new to land" means the tip was already in the target before this submission.
+the original landing. "Nothing new to land" means the tip was already in the target before this submission: such a
+resubmission, which only clears a failed record, is reported at once, without merging, setting up, checking or
+integrating anything.
 
-The extension restarts a lander for every source whose queue holds submissions while its task is missing or ended:
+The extension restarts a lander for every repository whose queue holds submissions while its task is missing or ended:
 when the harness opens, on each reload of the extension, and at once when a task of the previous code faults. A fault
 of the current code's own task waits for the next submit or open, so a deterministic fault does not loop.
 

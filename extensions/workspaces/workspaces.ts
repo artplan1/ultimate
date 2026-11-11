@@ -80,6 +80,14 @@ async function landerIdle(tx: Tx, index: WorkspaceIndex, source: string) {
   const live = running === undefined ? undefined : await tx.task(running as TaskId)
   return !live || live.state.status === 'terminal' || live.state.status === 'completing'
 }
+/**
+ * The repository a checkout belongs to, named by its main checkout: landers are keyed by it, so a branch started inside
+ * a worktree lands through its repository's lander and queue instead of standing up a second one beside it.
+ */
+export async function repositoryOf(source: string) {
+  const listed = (await git(source, 'worktree', 'list', '--porcelain')).split('\n')
+  return realpath(listed.find((line) => line.startsWith('worktree '))!.slice('worktree '.length))
+}
 type Host = Pick<
   ExtensionHost,
   | 'harness'
@@ -236,7 +244,6 @@ export function workspaces(host: Host) {
     tx: Tx,
     index: WorkspaceIndex,
     source: string,
-    target: string,
     /** `landerPath()` of `source`, resolved before the transaction. */
     path: string,
   ) {
@@ -257,28 +264,86 @@ export function workspaces(host: Host) {
     return lander
   }
   /**
+   * Drop the record of a lander that is no longer where its repository lands: one an earlier version keyed by the path a
+   * submit came from (its queue moves to the repository's lander) and one whose checkout is gone with nothing queued (it
+   * can receive none). The conversation becomes an ordinary one again: no longer pinned, standing or fed work.
+   */
+  async function cutLanders(context: Context, own: string | undefined) {
+    const index = await host.harness().snapshot(Workspaces, ROOT_CONVERSATION_ID, context)
+    const cut: { key: string; repository?: string }[] = []
+    for (const key of new Set([
+      ...Object.keys(index?.landerConversations ?? {}),
+      ...Object.keys(index?.landers ?? {}),
+    ])) {
+      if (key === own) continue
+      const repository = await repositoryOf(key).catch(
+        // A checkout that is gone cannot name its repository; that is the case below, not a failure to report.
+        () => undefined,
+      )
+      if (repository !== undefined && repository !== key) cut.push({ key, repository })
+      // Its checkout is gone, so it can never land again; queued work keeps its record rather than being stranded.
+      else if (repository === undefined && !index?.queue.some((item) => item.source === key))
+        cut.push({ key })
+    }
+    if (!cut.length) return
+    await host.harness().commit(async (tx) => {
+      const doc = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
+      // Reads before writes: a transaction cannot read tables after its first write.
+      const rows = await Promise.all(
+        cut.map(async ({ key, repository }) => {
+          const conversation = doc.landerConversations[key] as ConversationId | undefined
+          return {
+            key,
+            repository,
+            conversation:
+              conversation !== undefined && (await tx.conversation(conversation))
+                ? conversation
+                : undefined,
+            idle: await landerIdle(tx, doc, key),
+          }
+        }),
+      )
+      for (const row of rows) {
+        // A live task keeps its record and its entries until it ends; the next open cuts it then, so no second task
+        // picks up a submission it is landing right now.
+        if (!row.idle) continue
+        if (row.repository)
+          for (const item of doc.queue) if (item.source === row.key) item.source = row.repository
+        delete doc.landerConversations[row.key]
+        delete doc.landers[row.key]
+        if (row.conversation !== undefined)
+          await host.need(ConversationsApi).setStanding(tx, row.conversation, false)
+      }
+    }, context)
+  }
+  /**
    * Make sure the project's checkout has its lander conversation. Idempotent; a project that cannot be isolated (outside
    * Git, or before its first commit) has none until it can.
    */
   async function standLander(context: Context) {
+    const checkout = await isolatable(host.projectRoot)
+    const { source, target } = 'source' in checkout ? checkout : {}
+    const repository = source && (await repositoryOf(source))
+    // Before the landers are marked standing: a cut one is no lander any more.
+    await cutLanders(context, repository)
     // Landers stay standing even when preparing the checkout below fails.
     await host.harness().commit(async (tx) => {
       const index = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
       for (const id of Object.values(index.landerConversations) as ConversationId[])
         if (await tx.conversation(id)) await host.need(ConversationsApi).setStanding(tx, id, true)
     }, context)
-    const checkout = await isolatable(host.projectRoot)
-    const { source, target } = 'source' in checkout ? checkout : {}
     // The conversation's cwd exists from the start, at the target tip, so it can answer before any submission.
     const path =
-      source && target && (await landerCheckout(host.home, source, await host.projectSettings()))
+      repository &&
+      target &&
+      (await landerCheckout(host.home, repository, await host.projectSettings()))
     await host.harness().commit(async (tx) => {
       const index = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
       const landers: ConversationId[] = []
       for (const id of Object.values(index.landerConversations) as ConversationId[])
         if (await tx.conversation(id)) landers.push(id)
-      if (source && target && path) {
-        const own = await ensureLander(tx, index, source, target, path)
+      if (repository && path) {
+        const own = await ensureLander(tx, index, repository, path)
         if (!landers.includes(own)) landers.push(own)
       }
       // A lander keeps its `@lander` title: no automatic summaries.
@@ -809,7 +874,8 @@ export function workspaces(host: Host) {
     if ((await git(workspace.path, 'symbolic-ref', '--short', 'HEAD')) !== workspace.branch)
       throw new Error('Workspace branch changed')
     const tip = await git(workspace.path, 'rev-parse', 'HEAD')
-    const path = await landerPath(host.home, workspace.source, await host.projectSettings())
+    const repository = await repositoryOf(workspace.source)
+    const path = await landerPath(host.home, repository, await host.projectSettings())
     const subject = await host.need(ConversationsApi).subject(id, context)
     const result = await host.harness().commit(async (tx) => {
       const row = await tx.conversation(id)
@@ -819,17 +885,17 @@ export function workspaces(host: Host) {
       if (at === undefined)
         throw new Error('Submitting requires a conversation entry for its breadcrumb')
       const index = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
-      const { source, target } = index.items[String(id)]
+      const { target } = index.items[String(id)]
       // Reads first: a transaction cannot read tables after its first write.
-      const stopped = await landerIdle(tx, index, source)
-      const lander = await ensureLander(tx, index, source, target, path)
+      const stopped = await landerIdle(tx, index, repository)
+      const lander = await ensureLander(tx, index, repository, path)
       const queued = index.queue.find(
         (item) => item.conversationId === id && item.tip === tip && item.state === 'queued',
       )
       const entry = queued ?? {
         id: `${id}-${tip.slice(0, 7)}-${Date.now().toString(36)}`,
         conversationId: id,
-        source,
+        source: repository,
         target,
         tip,
         at,
@@ -842,9 +908,9 @@ export function workspaces(host: Host) {
         await log(tx, lander, entry, { step: 'queued' })
         index.queue.push(entry)
       }
-      if (stopped) await startLander(tx, index, source)
+      if (stopped) await startLander(tx, index, repository)
       const position = index.queue
-        .filter((item) => item.source === source)
+        .filter((item) => item.source === repository)
         .findIndex((item) => item.id === entry.id)
       return {
         id: entry.id,

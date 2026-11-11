@@ -32,7 +32,7 @@ import {
 } from './refs.ts'
 import { githubRepo } from '../../lib/project-identity.ts'
 import { sweepChecks } from './lander.ts'
-import { Workspaces, workspaces } from './workspaces.ts'
+import { Workspaces, repositoryOf, workspaces } from './workspaces.ts'
 export const order = -200
 export const docs = [Workspaces]
 export const userActions = ['setupGit']
@@ -112,7 +112,7 @@ export const actions = {
     if ('reason' in checkout)
       return { reason: checkout.reason, empty: await empty(host.projectRoot) }
     const index = await host.harness().snapshot(Workspaces, ROOT_CONVERSATION_ID, context)
-    if (index?.landerConversations[checkout.source] === undefined)
+    if (index?.landerConversations[await repositoryOf(checkout.source)] === undefined)
       await workspaces(host).standLander(context)
     return {}
   }),

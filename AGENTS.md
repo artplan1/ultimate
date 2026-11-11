@@ -93,6 +93,8 @@ see [integration details](docs/worktrees.md#standing-permission-to-push-this-rep
 
 ## Conventions
 
+- File and content discovery goes through the `search` tool: `bash` is for git, builds, tests, running programs and
+  one-off shell work, and a lookup piped through `rg`/`grep` there is the wrong tool.
 - Keep local conversation/thread IDs out of new commit messages and GitHub PR titles, bodies and comments. Commit provenance stays in Ultimate's private events, not public Git metadata.
 - Pi is the role model: minimal, readable, malleable. Prefer platform features and existing dependencies; justify every
   new dependency in its commit message.

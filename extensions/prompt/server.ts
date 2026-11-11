@@ -301,7 +301,9 @@ export default function prompt(host: ExtensionHost) {
       section('tools', (input) => {
         const guidance: Record<string, string> = {
           read: '- read: inspect files, with offset/limit for large files.',
-          bash: '- bash: run commands, tests, builds, git, and searches (rg, find, ls). Long output is truncated; the full output is saved to a file you can read. To wait or poll (CI, deploys, a server or file appearing), use interruptible: true so a steering message ends it early; keep each sleep at 30 s or less per check, and never wait in the same call as a command that changes things.',
+          search:
+            '- search: find files by path or their contents, indexed and read-only; every lookup goes here, never through rg, grep or find in bash.',
+          bash: '- bash: run commands, tests, builds, git and one-off shell work. Long output is truncated; the full output is saved to a file you can read. To wait or poll (CI, deploys, a server or file appearing), use interruptible: true so a steering message ends it early; keep each sleep at 30 s or less per check, and never wait in the same call as a command that changes things.',
           edit: '- edit: change existing files with precise replacements. Each edits[].oldText must match the file exactly and be unique; keep it small. Put several changes to one file into one call; edits are matched against the original file, so never overlap them. After "Could not find", read the region again before retrying; after "Found N occurrences", widen oldText with surrounding lines.',
           write: '- write: create new files or rewrite one completely.',
         }
@@ -310,7 +312,7 @@ export default function prompt(host: ExtensionHost) {
           ...[...names].flatMap((name) => (guidance[name] ? [guidance[name]] : [])),
           ...(names.has('bash') && names.has('read') && names.has('edit') && names.has('write')
             ? [
-                '- IMPORTANT: never use bash to read or change files when a dedicated tool does it. Read with read, not cat, head, tail or sed -n. Change files with edit, not sed -i, perl, awk or a python or node script. Create files with write, not a heredoc, echo or printf redirect. The person reviews your work through these tools: edit and write show each change as a diff, a script in bash hides it, and edit refuses text that does not match exactly once where a script silently changes nothing. A rename across a few files is one edit call per file. Only output a program generates (formatters, codegen, package managers) or a mechanical change across many files goes through bash.',
+                '- IMPORTANT: never use bash to read or change files when a dedicated tool does it, and never to look up files or contents when search does. Read with read, not cat, head, tail or sed -n. Change files with edit, not sed -i, perl, awk or a python or node script. Create files with write, not a heredoc, echo or printf redirect. The person reviews your work through these tools: edit and write show each change as a diff, a script in bash hides it, and edit refuses text that does not match exactly once where a script silently changes nothing. A rename across a few files is one edit call per file. Only output a program generates (formatters, codegen, package managers) or a mechanical change across many files goes through bash.',
               ]
             : []),
           '- You talk to the person through a web UI that renders Markdown: short paragraphs, lists, fenced code with a language, and file paths in backticks.',

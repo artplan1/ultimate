@@ -341,14 +341,8 @@ export default function prompt(host: ExtensionHost) {
         const off = host.extensions().filter((extension) => !extension.enabled)
         if (!off.length) return undefined
         return [
-          `Available but off building blocks live in ${host.ultimateRoot}/extensions/:`,
-          ...off.map((extension) => {
-            const sentence = extension.readme
-              ?.trim()
-              .split(/(?<=[.!?])\s/)[0]
-              ?.replace(/\s+/g, ' ')
-            return `- ${extension.name}: ${sentence ?? ''}`
-          }),
+          `Available but off, one folder each in ${host.ultimateRoot}/extensions/: ${off.map((extension) => extension.name).join(', ')}.`,
+          "Each one's README.md says what it does.",
           'Enable names with "extensions": { "enable": [...] } in ~/.ultimate/settings.json (this machine) or <project>/.ultimate/settings.json (the host project). Changes apply live with no restart.',
           `The running host uses ${host.projectRoot}/.ultimate/settings.json and ${host.projectRoot}/.ultimate/extensions/; editing these in a separate work checkout does not change the host's configuration or hot-reload its extensions.`,
         ].join('\n')

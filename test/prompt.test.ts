@@ -4,6 +4,11 @@ import { expect, it, vi } from 'vitest'
 import { context } from '../server/harness.ts'
 import { fauxServer, temp, removeTemp, until } from './helpers.ts'
 
+/** The extension names the building_blocks section lists as available but off. */
+function offNames(section: string) {
+  return section.split('\n')[0].split(': ').pop()!.replace(/\.$/u, '').split(', ')
+}
+
 it('renders only enabled guidance, lists off building blocks, and adds self guidance live', async () => {
   const home = await temp()
   vi.stubEnv('PI_CODING_AGENT_DIR', join(home, 'pi'))
@@ -52,7 +57,7 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
     }
     const withoutSelf = await render()
     expect(withoutSelf.self).toBeUndefined()
-    expect(withoutSelf.building_blocks).toContain('- self:')
+    expect(offNames(withoutSelf.building_blocks)).toContain('self')
 
     await writeFile(settings, '{}')
     server.vite.watcher.emit('change', settings)
@@ -60,8 +65,8 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
     const withSelf = await render()
     expect(withSelf.self).toBeDefined()
     // Only the default-off built-ins are left to list.
-    expect(withSelf.building_blocks).not.toContain('- self:')
-    expect(withSelf.building_blocks).toContain('- sounds:')
+    expect(offNames(withSelf.building_blocks)).not.toContain('self')
+    expect(offNames(withSelf.building_blocks)).toContain('sounds')
 
     const checkout = join(home, 'isolated-work')
     await mkdir(checkout)

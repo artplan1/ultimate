@@ -108,9 +108,10 @@ The Git status is read again whenever the shown conversation finishes a run, inc
 ## Extensions panel
 
 The right-panel tab (palette **Extensions…**) shows the project decision, a way to change it, Use this project's setup
-everywhere, and every extension with its source, deciding layer, README line and switch. Switches save everywhere
-(`~/.ultimate/settings.json`) unless you pick this project (when its setup is in use): a project's settings file is
-usually committed, so a personal toggle never lands there by default. A core-tier extension's switch stays on and disabled, its deciding layer
+everywhere, and every extension with its source, deciding layer, README line and switch. Switches save where the
+decision is: this project's `.ultimate/settings.json` when its setup is in use, the user's `~/.ultimate/settings.json`
+otherwise, and picking everywhere moves them there for the session, since a project's settings file is usually
+committed and a personal toggle should not land in it by accident. A core-tier extension's switch stays on and disabled, its deciding layer
 reads `core`: the server keeps the core tier enabled whatever the settings say. Failures show on the row; the list
 follows system info. Clicking a row opens it in place (open rows are kept in UI state): its tools with their
 description's first line, contract summary, what it provides, needs and wants, actions, documents, events, web

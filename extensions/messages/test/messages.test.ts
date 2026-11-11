@@ -1351,7 +1351,12 @@ it("forwards tool-result images by id, not an earlier turn's as latest, and chec
   expect(f.observed.join('\n')).toContain(`entry ${elsewhere} is not in this conversation`)
   expect((await f.log())!.messages.filter((m) => m.from === 1)).toHaveLength(1)
 })
-async function branched(f: Awaited<ReturnType<typeof fixture>>, prompt = 'Explore') {
+async function branched(
+  f: Awaited<ReturnType<typeof fixture>>,
+  prompt = 'Explore',
+  // What the call says about isolation; empty leaves the tool to decide, as a caller that says nothing does.
+  isolation: { isolated?: boolean } = { isolated: false },
+) {
   const tool = (await f.opened.root.agent(context)).deferred.find(
     (candidate) => candidate.name === 'branch',
   )
@@ -1360,7 +1365,7 @@ async function branched(f: Awaited<ReturnType<typeof fixture>>, prompt = 'Explor
     if (tool) await configure(tx, f.opened.root.id, { modelTools: { add: [tool] } })
   }, context)
   await f.opened.root.submit(
-    { type: 'input', content: 'BRANCH ' + JSON.stringify({ prompt, isolated: false }) },
+    { type: 'input', content: 'BRANCH ' + JSON.stringify({ prompt, ...isolation }) },
     context,
   )
   const before = (await replies(f)).length
@@ -1459,6 +1464,12 @@ it('forwards images into a new branch with its prompt', async () => {
   expect(message.images?.count).toBe(1)
   const entry = await placed(f, message.to as number, message.id)
   expect(imagesIn(entry)).toEqual([png(0)])
+})
+it('runs a branch in the project folder when there is no repository to isolate and the caller says nothing', async () => {
+  const f = await fixture()
+  // This project is a temporary folder outside Git, like a project whose repositories are only in subfolders.
+  const b = await branched(f, 'Work outside Git', {})
+  expect((await b.branch.agent(context)).cwd).toBe(f.host.projectRoot)
 })
 it("routes a branch's later final answer to its starter once, waking it when the branch stopped idle", async () => {
   const f = await fixture()

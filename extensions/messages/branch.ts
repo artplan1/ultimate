@@ -1,7 +1,9 @@
 /** The `branch` tool: start a lineage branch and send it its first message. */
+import { resolve } from 'node:path'
 import { bool, num, obj, opt, str } from '@earendil-works/pi-schema'
 import { configure, defineTool, ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
 import type { ConversationId } from '@earendil-works/pi-durable'
+import { isolatable, noRepository } from '../../lib/git.ts'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import {
   definitionAgent,
@@ -38,7 +40,12 @@ export const branchTool = (host: ExtensionHost) =>
             'Existing folder the branch owns; relative paths resolve from the project root. Defaults to the project root.',
         }),
       ),
-      isolated: opt(bool()),
+      isolated: opt(
+        bool({
+          description:
+            'Give the branch its own Git worktree. Default: a worktree when the folder has a repository to isolate, else the shared checkout.',
+        }),
+      ),
       images: opt(imagesParameter),
     }),
     // Lineage atomically deduplicates the fork; Sent deduplicates its first message.
@@ -85,13 +92,19 @@ export const branchTool = (host: ExtensionHost) =>
           host.modelRuntime,
         )
         const { model, thinkingLevel, modelTools } = change
+        // A folder outside Git — a project whose repositories are only in subfolders — has no checkout to isolate, so a
+        // branch left to the default runs shared there instead of failing. Any other reason (no first commit, a detached
+        // HEAD) is fixable and keeps the worktree, and an explicit `isolated: true` still fails in workspaces' create.
+        const checkout = await isolatable(resolve(host.projectRoot, input.cwd ?? host.projectRoot))
+        const isolated =
+          input.isolated ?? ('reason' in checkout ? checkout.reason !== noRepository : true)
         const branch = await lineage.branch(
           {
             from: root,
             prompt: input.prompt,
             ...(input.title ? { title: input.title } : {}),
             ...(input.cwd ? { cwd: input.cwd } : {}),
-            isolated: input.isolated ?? true,
+            isolated,
             deliver: false,
             by: from,
             receipt: { taskId: api.taskId, callId: api.callId },

@@ -527,6 +527,7 @@ export function BranchCall({ call, core }: { call: ToolCallView; core: ReactNode
   const started = /^Branch #(\d+) started; message (\d+) sent\.$/.exec(call.output)
   const id = started ? Number(started[1]) : undefined
   const title = useConversationSummary(id)?.title
+  const workspaces = useWorkspaceIndex().items
   if (call.status === 'error' || call.status === 'interrupted') return core
   const message = started ? log?.messages.find((m) => m.id === Number(started[2])) : undefined
   const { prompt, root, isolated } = call.args as {
@@ -534,6 +535,10 @@ export function BranchCall({ call, core }: { call: ToolCallView; core: ReactNode
     root?: number
     isolated?: boolean
   }
+  // Where the branch runs: its workspace is the truth once it exists; before that only an explicit choice says, since a
+  // branch left to the default is isolated or shared depending on its folder.
+  const runsIsolated = id !== undefined ? workspaces[String(id)] !== undefined : isolated
+  const mode = runsIsolated === undefined ? undefined : runsIsolated ? 'isolated' : 'shared'
   const state =
     id === undefined
       ? 'starting'
@@ -575,9 +580,13 @@ export function BranchCall({ call, core }: { call: ToolCallView; core: ReactNode
             </span>
           )}
           <span className="shrink-0 max-sm:hidden">
-            {root !== undefined && `from #${root} · `}
-            {(isolated ?? true) ? 'isolated' : 'shared'}
-            {message?.images && ` · ${imageCount(message.images.count)}`}
+            {[
+              root !== undefined && `from #${root}`,
+              mode,
+              message?.images && imageCount(message.images.count),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
           <span className={`shrink-0 ${state === 'failed' ? 'text-destructive' : ''}`}>
             · {state}

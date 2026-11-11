@@ -555,6 +555,15 @@ it.concurrent('delivers a branch’s prompt once when the process stops before i
   ])
 })
 
+it.concurrent('refuses an isolated branch where there is no Git repository to isolate', async () => {
+  const { server } = await fixture()
+  await seedTally(server.harness)
+  // The project folder is outside Git: asking for a worktree says so instead of quietly branching in the folder.
+  const { status, data } = await post(server, '/api/extensions/branch-probe/actions/branch', {
+    args: { from: 1, prompt: 'Isolate me', isolated: true },
+  })
+  expect([status, data.error]).toEqual([500, 'Isolation needs a Git repository'])
+})
 it.concurrent('defaults a branch to its source’s configuration', async () => {
   const { server } = await fixture()
   const model = { provider: 'faux', modelId: 'faux-1' }

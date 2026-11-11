@@ -72,12 +72,14 @@ line listing them; @ultimate's lists every open question to the user and names `
 Talk to `@ultimate` in its own conversation (the first sidebar row; on phones, the top-bar button). It is the standing
 orchestrator, not a coding worker. Model-facing text names standing senders `#12 (@ultimate)`, user replies `user`.
 
-`branch { prompt, title?, root?, isolated?: true, images? }` (deferred; offered to definitions that name it) starts a
+`branch { prompt, title?, root?, isolated?, images? }` (deferred; offered to definitions that name it) starts a
 lineage branch from the explicit root, else the caller's tree root, else the only root, and sends the prompt as a
 reply-enabled first message; it returns the branch and message ids. `title` (one line, at most 60 characters) names it
 until its summary does. The branch runs the `coordinator` definition (instructions, pinned model and thinking when its
 provider has a login, else the default model) with the caller's tools, labelled `coordinator`, and its caller is
-recorded in `board.started`.
+recorded in `board.started`. Without `isolated` the branch gets its own worktree when its folder has a repository to
+isolate; in a project outside Git (its repositories only in subfolders) it runs in the shared folder instead, and an
+explicit `isolated: true` there still fails with "Isolation needs a Git repository".
 
 A branch's decisions go to @ultimate first, which weighs in; the branch then asks the user with a reply-expected message
 with `questions` in its own conversation. Reports that need no answer use `reply: false`.

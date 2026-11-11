@@ -10,7 +10,8 @@ import { projectDecision } from '../../../server/project-setup.ts'
 import { updateSettings } from '../../../lib/settings.ts'
 import { ProjectTrustStore } from '@earendil-works/pi-coding-agent'
 
-it.concurrent('gates project resources, remembers choices, and applies onboarding settings actions live', async () => {
+/** The project and settings a first-run test inspects: a local extension, an agent, a skill, a README and settings. */
+async function firstRun() {
   const home = await temp('ultimate-onboarding-')
   const project = join(home, 'project')
   const config = join(project, '.ultimate')
@@ -53,18 +54,28 @@ it.concurrent('gates project resources, remembers choices, and applies onboardin
     localSetup: false,
     firstRun: true,
   }
-  let server: Awaited<ReturnType<typeof fauxServer>> | undefined
+  return { home, project, userFile, projectFile, options }
+}
+
+/** A server over the first-run project, with the onboarding action helpers its tests share. */
+async function open(options: Parameters<typeof fauxServer>[0]) {
+  const server = await fauxServer(options)
+  const action = async (name: string, args: unknown = {}) => {
+    const response = await post(server, `/api/extensions/onboarding/actions/${name}`, { args })
+    expect(response.status).toBe(200)
+    return response.data.result
+  }
+  const enabled = (name: string) =>
+    server.extensions.info().find((entry) => entry.name === name)?.enabled
+  const web = async () => server.web.facets()
+  const tools = async () => (await server.root.agent(context)).tools.map((tool) => tool.name)
+  return { server, action, enabled, web, tools }
+}
+
+it.concurrent("keeps the project's extensions, agents and skills off and out of reach until the user decides", async () => {
+  const { home, options } = await firstRun()
+  const { server, action, enabled, tools } = await open(options)
   try {
-    server = await fauxServer(options)
-    const action = async (name: string, args: unknown = {}) => {
-      const response = await post(server!, `/api/extensions/onboarding/actions/${name}`, { args })
-      expect(response.status).toBe(200)
-      return response.data.result
-    }
-    const enabled = (name: string) =>
-      server!.extensions.info().find((entry) => entry.name === name)?.enabled
-    const web = async () => server!.web.facets()
-    const tools = async () => (await server!.root.agent(context)).tools.map((tool) => tool.name)
     for (const args of [
       {},
       { extensions: { plan: 'yes' } },
@@ -122,17 +133,51 @@ it.concurrent('gates project resources, remembers choices, and applies onboardin
     })
     expect(denied.status).toBe(500)
     expect(denied.data.error).toContain('local setup')
-    await action('decide', { local: true })
-    expect(enabled('x')).toBe(true)
-    expect(enabled('automations')).toBe(false)
-    expect(await tools()).not.toContain('automation')
-    expect((await web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(true)
-    expect(server.system.current().skills.some((skill) => skill.name === 'local-skill')).toBe(true)
-    expect(projectDecision(project, home)).toBe(true)
+  } finally {
     await server.close()
-    server = await fauxServer(options)
-    expect(server.system.current().project.decision).toBe(true)
-    expect(enabled('x')).toBe(true)
+    await removeTemp(home)
+  }
+})
+
+it.concurrent('applies the local decision live, and remembers it across a restart', async () => {
+  const { home, project, options } = await firstRun()
+  const first = await open(options)
+  try {
+    await first.action('decide', { local: true })
+    expect(first.enabled('x')).toBe(true)
+    expect(first.enabled('automations')).toBe(false)
+    expect(await first.tools()).not.toContain('automation')
+    expect((await first.web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(true)
+    expect(first.server.system.current().skills.some((skill) => skill.name === 'local-skill')).toBe(
+      true,
+    )
+    expect(projectDecision(project, home)).toBe(true)
+    await first.server.close()
+    const second = await open(options)
+    try {
+      expect(second.server.system.current().project.decision).toBe(true)
+      expect(second.enabled('x')).toBe(true)
+      await second.action('decide', { local: false })
+      expect(second.enabled('x')).toBe(false)
+      expect(second.enabled('automations')).toBe(true)
+      expect(await second.tools()).toContain('automation')
+      expect((await second.web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(false)
+      expect(
+        second.server.system.current().skills.some((skill) => skill.name === 'local-skill'),
+      ).toBe(false)
+    } finally {
+      await second.server.close()
+    }
+  } finally {
+    await removeTemp(home)
+  }
+})
+
+it.concurrent('writes project and user settings through onboarding, keeping keys it does not own', async () => {
+  const { home, options, projectFile, userFile } = await firstRun()
+  const { server, action, enabled, web } = await open(options)
+  try {
+    await action('decide', { local: true })
     await action('setExtension', { name: 'splash', enabled: false, scope: 'project' })
     expect(enabled('splash')).toBe(false)
     expect((await web()).some((path) => path.endsWith('/splash/web.tsx'))).toBe(false)
@@ -178,12 +223,31 @@ it.concurrent('gates project resources, remembers choices, and applies onboardin
     expect(
       (await action('extensions')).find((entry: { name: string }) => entry.name === 'sounds').layer,
     ).toBe('user')
-    await action('decide', { local: false })
-    expect(enabled('x')).toBe(false)
-    expect(enabled('automations')).toBe(true)
-    expect(await tools()).toContain('automation')
-    expect((await web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(false)
-    expect(server.system.current().skills.some((skill) => skill.name === 'local-skill')).toBe(false)
+  } finally {
+    await server.close()
+    await removeTemp(home)
+  }
+})
+
+it.concurrent("adopts the project's setup only after a decision, and marks the first run done", async () => {
+  const { home, options, projectFile, userFile } = await firstRun()
+  // The state an earlier session leaves behind: splash on for the project, sounds off for the user, and keys the
+  // onboarding actions do not own in both files.
+  await writeFile(
+    projectFile,
+    JSON.stringify({
+      defaultSurface: 'workbench',
+      custom: { keep: 1 },
+      extensions: { extra: 'keep', enable: ['splash'], disable: ['automations'] },
+    }),
+  )
+  await mkdir(join(home, '.ultimate'), { recursive: true })
+  await writeFile(
+    userFile,
+    JSON.stringify({ custom: 'user', extensions: { disable: ['sounds'], extra: 2 } }),
+  )
+  const { server, action, enabled } = await open(options)
+  try {
     const adoptDenied = await post(server, '/api/extensions/onboarding/actions/adoptProjectSetup', {
       args: {},
     })
@@ -208,12 +272,15 @@ it.concurrent('gates project resources, remembers choices, and applies onboardin
     await action('firstRunDone')
     expect((await action('status')).firstRun).toBe(false)
     await server.close()
-    server = await fauxServer(options)
-    expect(server.system.current().project.decision).toBe(false)
-    expect(enabled('x')).toBe(false)
-    expect((await action('status')).firstRun).toBe(false)
+    const restarted = await open(options)
+    try {
+      expect(restarted.server.system.current().project.decision).toBe(false)
+      expect(restarted.enabled('x')).toBe(false)
+      expect((await restarted.action('status')).firstRun).toBe(false)
+    } finally {
+      await restarted.server.close()
+    }
   } finally {
-    await server?.close()
     await removeTemp(home)
   }
 })

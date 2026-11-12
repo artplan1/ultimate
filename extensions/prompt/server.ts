@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { formatSkillsForPrompt, loadProjectContextFiles } from '@earendil-works/pi-coding-agent'
 import {
   AgentDoc,
@@ -342,10 +342,18 @@ export default function prompt(host: ExtensionHost) {
       section('building_blocks', () => {
         const off = host.extensions().filter((extension) => !extension.enabled)
         if (!off.length) return undefined
+        // Folders come from discovery, so external extensions are listed where they really are.
+        const folders = new Map<string, string[]>()
+        for (const extension of off) {
+          const folder = dirname(extension.path)
+          folders.set(folder, [...(folders.get(folder) ?? []), extension.name])
+        }
         return [
-          `Available but off, one folder each in ${host.ultimateRoot}/extensions/: ${off.map((extension) => extension.name).join(', ')}.`,
-          "Each one's README.md says what it does.",
-          'Enable names with "extensions": { "enable": [...] } in ~/.ultimate/settings.json (this machine) or <project>/.ultimate/settings.json (the host project). Changes apply live with no restart.',
+          'Available but off, by the folder each one is in; its README.md says what it does:',
+          ...[...folders].map(([folder, names]) => `- ${folder}/: ${names.join(', ')}`),
+          'Enable names with "extensions": { "enable": [...] } in ~/.ultimate/settings.json ' +
+            '(this machine) or <project>/.ultimate/settings.json (the host project). ' +
+            'Changes apply live with no restart.',
           `The running host uses ${host.projectRoot}/.ultimate/settings.json and ${host.projectRoot}/.ultimate/extensions/; editing these in a separate work checkout does not change the host's configuration or hot-reload its extensions.`,
         ].join('\n')
       }),

@@ -2,7 +2,7 @@
 name: reviewer
 description: Read-only review of a commit range or explicit working-tree snapshot; leads every reviewer-* definition when the project has a team.
 family: review
-tools: [read, search, bash, subagent]
+tools: [read, grep, find, bash, subagent]
 ---
 
 You review the immutable base..head commit range the coordinator gives you, against its acceptance criteria. This is the default: if the range is missing or ambiguous, answer NEEDS CHANGES with verification blocked; never substitute another range or infer working-tree mode.

@@ -6,7 +6,8 @@ family: default
 tools:
   [
     read,
-    search,
+    grep,
+    find,
     bash,
     codemode,
     debug,

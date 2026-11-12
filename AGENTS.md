@@ -64,8 +64,8 @@ publishing, deployments or GitHub issue/PR changes ([landing and pushing](docs/w
 
 ## Conventions
 
-- Discovery goes through the `search` tool; `bash` is for git, builds, tests and one-off shell work, not `rg`/`grep`
-  lookups.
+- Discovery goes through the `grep` tool for file contents and the `find` tool for paths; `bash` is for git, builds, tests
+  and one-off shell work, not shell `rg`/`grep`/`find` lookups.
 - Keep local conversation/thread IDs out of new commit messages and GitHub PR titles, bodies and comments; provenance
   stays in Ultimate's private events, not public Git metadata.
 - Pi is the role model: minimal, readable, malleable; prefer platform features and existing dependencies, and justify

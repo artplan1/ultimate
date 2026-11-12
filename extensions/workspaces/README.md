@@ -137,18 +137,20 @@ a success, warning (landed, push failed) or error accent and the same collapsed 
 conversation; it keeps the full log, grouped by submission, and shows in the Agents tab.
 The commit that records a landed outcome (also when only its push failed) emits the durable event
 `workspaces.landed` (`SubmissionLanded` in `api.ts`): submission, submitter and its `at`, `sha`, `base`, `target`,
-lander, divergence, the submit-time title, summary and feature, the first ten commits with `commitCount`, the first
-eight paths and `pushed`. A failed outcome emits `workspaces.landing-failed` (`SubmissionFailed`): submission,
+`submitted` (the tip handed over at submit), lander, divergence, the submit-time title, summary and feature, the first
+ten commits with `commitCount`, the first eight paths and `pushed`. A failed outcome emits `workspaces.landing-failed` (`SubmissionFailed`): submission,
 submitter, target and `reason`; it `fails` `workspaces.landed`, so a browser `until` on a landing ends with it. Each check run, a rerun included, emits `workspaces.check`
 (`CheckRan`): submission, command, `passed`, `failed`, `flaky` or `timeout` (a watchdog stopped it) and its `ms`, in the
 commit that logs its result. Lineage reacts to it with a landing note in the submitter's tree
 root, exactly once, unless the submitter is that root or has none; the lander itself calls no lineage service. Its
-data includes `divergence` and `at` alongside `from`, `sha`, `target`,
+data includes `divergence` and `at` alongside `from`, `sha`, `submitted`, `target`,
 `commits` and `paths`; model text cites `#<from>/<at>` and always includes `Diverged: …`, even for "None". The
 submit-time summary stays in the data and on the card but not in the model text: it is often stale, and the tally's
 abstract of the submitter tells its story. In a tally, the note freezes that abstract: it carries it as `abstract`
 with a `State at landing` block in its text, and the card shows it collapsed (see the lineage README).
-The shared landing card in the root and submitter shows a quiet Diverged line and the breadcrumb.
+The shared landing card in the root and submitter shows a quiet Diverged line and the breadcrumb, and, when the target
+moved since the submit, the submitted tip (`Submitted <sha>`) beside the landed commit: the landed tip is then the
+merge that carries it, and the receipt names both.
 Failed submissions leave no root note; notes never wake the root.
 
 What lands is named once, at submit: the queue entry keeps the submitter's `subject` (title, summary and feature)

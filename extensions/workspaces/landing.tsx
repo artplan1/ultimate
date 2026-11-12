@@ -190,6 +190,7 @@ export function LandingCard({
   subject,
   from,
   sha,
+  submitted,
   at,
   divergence,
   sourceEntry,
@@ -204,6 +205,8 @@ export function LandingCard({
   from: number
   /** The landed commit, for the folded line. */
   sha?: string
+  /** The submitted tip, shown beside the landed commit when the target had moved since. */
+  submitted?: string
   at?: ReactNode
   divergence?: string
   sourceEntry?: number
@@ -249,6 +252,12 @@ export function LandingCard({
             <span className="min-w-0 flex-1 break-words text-foreground/90">{headline}</span>
             {at}
           </div>
+          {submitted && submitted !== sha && (
+            <p className="flex items-baseline gap-2 text-muted-foreground">
+              <span className="shrink-0 text-[11px]">Submitted</span>
+              <span className="min-w-0">{submitted.slice(0, 7)}</span>
+            </p>
+          )}
           {divergence && (
             <p className="flex items-baseline gap-2 text-muted-foreground">
               <span className="shrink-0 text-[11px]">Diverged</span>

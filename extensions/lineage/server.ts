@@ -625,9 +625,14 @@ const WOKEN_OTHER_TEXT =
 /** The note a landing leaves in its submitter's tree root: what landed, how it diverged, and the card's data. */
 function landingNote(landing: LandedData) {
   const more = landing.commitCount - landing.commits.length
+  const landed = landing.sha.slice(0, 7)
+  // The submitted tip and the landed commit are one when the target had not moved since; the receipt then names it once.
+  // A landing from before the event carried it has none.
+  const submitted = landing.submitted?.slice(0, 7)
+  const tip = submitted && submitted !== landed ? ` (submitted ${submitted})` : ''
   const text = [
     // The submit-time summary is often stale and the tally carries the abstract: the card shows it, the model does not.
-    `Landed ${landing.sha.slice(0, 7)} on ${landing.target} from #${landing.conversationId}/${landing.at} ${landing.title}${landing.feature ? ` (${landing.feature})` : ''}:`,
+    `Landed ${landed} on ${landing.target}${tip} from #${landing.conversationId}/${landing.at} ${landing.title}${landing.feature ? ` (${landing.feature})` : ''}:`,
     `Diverged: ${landing.divergence}`,
     ...landing.commits.map((commit) => commit.subject),
     ...(more ? [`and ${more} more`] : []),
@@ -644,6 +649,7 @@ function landingNote(landing: LandedData) {
     title: landing.title,
     more,
     lander: landing.lander,
+    ...(landing.submitted ? { submitted: landing.submitted } : {}),
     ...(landing.summary ? { summary: landing.summary } : {}),
     ...(landing.feature ? { feature: landing.feature } : {}),
     ...(landing.pushed ? { pushed: landing.pushed } : {}),

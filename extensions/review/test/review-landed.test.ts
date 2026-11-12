@@ -93,6 +93,7 @@ it('shows a landed branch as its landing range once its ref is gone, and moves o
         sha: tip,
         base,
         target: 'main',
+        submitted: tip,
         lander: 3,
         divergence: 'None',
         title: 'Commit owner',

@@ -72,6 +72,8 @@ Never end a run with work left unless a child, the lander or a reply will wake y
 
 For review, start one `reviewer` with the immutable `base..head` commit range and the acceptance criteria; it runs any review team and returns one verdict. Verify its findings yourself. The lander runs the source project's configured checks on the merged result. Children never push; you never push yourself, and never land, commit or reset in the user's checkout to test something.
 
+Following up a pull request, measure the whole PR against its base, not your latest patch: `gh pr view <n> --json additions,deletions,changedFiles` plus the test lines and every file you did not expect. Call the result simplified only once that aggregate is smaller.
+
 ## Talking to @ultimate and the user
 
 You ask the user your own decisions, in your conversation, after @ultimate has weighed in. Your assessment or `Decisions:` block goes to @ultimate first; it answers with one of: "ask the user" with its picks (mark exactly those `recommended`), "decided: …" (it decided in the user's place: go on), or "hold" (it asks the user itself, together with other branches). To ask, send one reply-expected `message {to: 'user', text, questions}`: the text explains, the questions decide, numbered with `ref` and lettered with `key`, reasoning in `detail`; the card adds "Something else…" and a note field itself. Then end your turn; the user's answer wakes you, and @ultimate reads it too. A preview approval is asked the same way, with the screenshots as `images`.

@@ -52,6 +52,9 @@ small; skip what is risky or vague), with one line on why. For each approved one
 - **Memory change:** apply it with one `remember` batch.
 
 A codified memory (`retire` on the proposal) stays until its branch lands; then delete or update it with `remember`.
+The same holds for papercuts: an approved repair lands first, then closes its rows with the `papercut` tool's
+`resolve` (`how: 'fixed'`, `ref` the commit or memory slug that fixed it); a row the user deferred stays open with
+its reason, and none is closed for being merely proposed.
 
 ### Prepare the fresh chapter
 
@@ -70,11 +73,12 @@ On `dream.ready`, call `prepare` once:
   rows still open where the `papercut` extension is installed: their index lives with this chapter, so the next one
   starts without it.
 
-It puts the Fall asleep card in your conversation and pins it in the status line. Then send the user one message: what
-the chapter carries, and that the card's Fall asleep button switches when they are ready. Only they press it; never
-call `asleep`. Fall asleep refuses while any top-level conversation is busy and names them; a branch still running is
-finished or stopped first, and one waiting on an answer should be named in the handover. `prepare` again replaces the
-card.
+It puts the Fall asleep card in your conversation and pins it in the status line. Approved repairs land before you
+prepare, so the next chapter opens on what is left; anything still running or deferred goes into the handover with
+its reason. Then send the user one message: what the chapter carries, and that the card's Fall asleep button switches
+when they are ready. Only they press it; never call `asleep`. Fall asleep refuses while any top-level conversation is
+busy and names them; a branch still running is finished or stopped first, and one waiting on an answer should be named
+in the handover. `prepare` again replaces the card.
 
 ## For the dream branch
 
@@ -135,8 +139,10 @@ actual defects. Name a root cause only when the evidence establishes it; an HTTP
   machine without the `papercut` extension fails that call with `Unknown extension action: papercut/list`: start from
   the `watchdog.failure` cards, the trace's failures and the entries instead. A row is a pointer to verify, not a
   verdict: check what actually happened in its conversation and quote it with `#conversation/entry`, and drop it when
-  the evidence does not hold. Then group what is left by cause, for the top ones propose a fix, and propose closing the
-  rows open over 30 days that never repeated.
+  the evidence does not hold. Every row that does hold gets an outcome in your report: a fix proposal, a deferral
+  with the reason it is not worth the change, or a close as noise or superseded; none stays open undecided. Then group
+  what is left by cause, for the top ones propose a fix, and propose closing the rows open over 30 days that never
+  repeated.
 - **tools** — `stats` gives calls, failures, mean duration and enabled tools never called. Explain the numbers: why a
   tool fails, which are slow, which unused ones should be taught or removed, what agents did by hand that a tool
   should do.

@@ -25,8 +25,8 @@ multi-select question listing the pieces below, plus **None, thanks**.
 | Worktree setup    | `settings.json` `isolates.worktree.setup`                                              | Each branch works in a fresh worktree without dependencies; setup installs them before the first tool call.                                                                 |
 
 Not part of the tour, never copied: `extensions.enable` (`voice-live` is a personal choice), `assign.preview` (only for
-projects that preview their own extensions), `skills/ultimate-provider-smoke` and `README.md` (both about Ultimate
-itself).
+projects that preview their own extensions), `.ultimate/skills/ultimate-provider-smoke` and `README.md` (both about
+Ultimate itself).
 
 ## 2. Adapt
 

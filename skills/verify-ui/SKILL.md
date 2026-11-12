@@ -19,7 +19,8 @@ Never claim a UI change works without an image of it.
 - `screenshot {url}` for a still image; `selector` for one element, `fullPage` for long pages, `width: 390` for phone,
   `theme: 'light'` and `'dark'` for both themes. Omit `path` so the PNG stays outside your checkout.
 - `browser {url, steps}` to drive a state: `click`, `fill` (`#composer-input` is the composer), `press`
-  (`Control+k` opens ⌘K), `wait`, `eval`. The result lists console errors and failed requests: read them.
+  (`Meta+k` opens ⌘K on macOS, `Control+k` elsewhere; `mod` in `web/src/sdk/keys.ts`), `wait`, `eval`. The result
+  lists console errors and failed requests: read them.
 - `eval` takes one expression and returns its value: `document.title`,
   `[...document.querySelectorAll('[data-entry-id]')].length`. Statements or `await` go in an async IIFE:
   `(async () => { const r = await fetch('/api/x'); return r.status })()`. A bare `const x = …; return x` fails.
@@ -46,11 +47,14 @@ Never claim a UI change works without an image of it.
 
 1. Every state: loading, empty, error, one item, many items, a long title.
 2. It matches its neighbours: an existing card or panel next to it, theme tokens, spacing.
-3. Transcript UI, on a long conversation:
+3. One control's label and its effect together: click it, then set what the label says happened against what the
+   screen now shows. A label naming the next value where the click sets a different one fails that pair, and checking
+   either alone misses it.
+4. Transcript UI, on a long conversation:
    1. scrollback: scroll up and back down; nothing jumps or reflows;
    2. live streaming: watch a reply and its tool calls stream in;
    3. folding: fold and unfold tool calls and update groups;
    4. phone width: a screenshot at `width: 390`.
-4. No new console errors.
+5. No new console errors.
 
 Say what you could not reach as unverified, with the reason.

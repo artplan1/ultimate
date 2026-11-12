@@ -1,7 +1,10 @@
+import { existsSync, readdirSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ProjectTrustStore } from '@earendil-works/pi-coding-agent'
 import { afterEach, expect, it } from 'vitest'
+import { decisionRoot } from '../server/project-setup.ts'
 import { expandSkillCommand, projectSkills } from '../server/skills.ts'
 import { skillInfo } from '../server/system.ts'
 import { removeTemp, temp } from './helpers.ts'
@@ -67,6 +70,30 @@ it('loads every scope, lets later scopes override and keeps Pi diagnostics', asy
       path: join(host.projectRoot, '.ultimate/skills/broken/SKILL.md'),
     },
   ])
+})
+
+// Skills here are silently dropped when a frontmatter value breaks YAML, which no other check sees.
+it('loads every skill this repository ships, with no load warning', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url))
+  const folders = (scope: string) =>
+    readdirSync(join(root, scope), { withFileTypes: true })
+      .filter((entry) => existsSync(join(root, scope, entry.name, 'SKILL.md')))
+      .map((entry) => join(root, scope, entry.name, 'SKILL.md'))
+  const shipped = folders('skills')
+  const project = folders('.ultimate/skills')
+  home = await temp()
+  new ProjectTrustStore(join(home, '.ultimate')).set(decisionRoot(root), true)
+  const { skills, diagnostics } = projectSkills({
+    ultimateRoot: root,
+    projectRoot: root,
+    userHome: home,
+  })
+  expect(diagnostics).toEqual([])
+  expect(skills.map((loaded) => loaded.filePath).toSorted()).toEqual(
+    [...shipped, ...project].toSorted(),
+  )
+  expect(shipped.length).toBeGreaterThan(0)
+  expect(project.length).toBeGreaterThan(0)
 })
 
 it('expands /skill:name args as Pi does and leaves anything else alone', async () => {

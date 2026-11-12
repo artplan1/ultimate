@@ -198,7 +198,9 @@ export default defineConfig({
     ],
     options: { denyWarnings: true, typeAware: true, typeCheck: true },
   },
-  fmt: { semi: false, singleQuote: true },
+  // The project's settings file is written by the app itself (`lib/json-file.ts`), which lays arrays out one element
+  // per line: formatting it makes every settings write fail `vp check` or churn the diff back and forth.
+  fmt: { semi: false, singleQuote: true, ignorePatterns: ['.ultimate/settings.json'] },
   test: {
     root: '.',
     globalSetup: ['test/sweep-temp.ts'],

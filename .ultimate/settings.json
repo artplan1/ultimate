@@ -1,6 +1,12 @@
 {
   "extensions": {
-    "disable": ["agent-browser", "keep-warm", "imagegen", "claude-code", "mcp"]
+    "disable": [
+      "agent-browser",
+      "keep-warm",
+      "imagegen",
+      "claude-code",
+      "mcp"
+    ]
   },
   "modelFamilies": {
     "families": {

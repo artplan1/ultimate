@@ -104,23 +104,34 @@ type Host = Pick<
   | 'notice'
   | 'emit'
 >
+/** Whether `ref` names a commit in the checkout at `path`, so a range can count against it. */
+async function resolves(path: string, ref: string) {
+  return Boolean(
+    await git(path, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => ''),
+  )
+}
 async function changes(
   id: ConversationId,
   workspace: WorkspaceIndex['items'][string],
 ): Promise<KeptWork> {
+  // A ref the repository no longer has (a branch renamed after the checkout was recorded) cannot say what landed:
+  // then only commits no branch holds count, the work removing the folder would lose.
+  const [target, branch] = await Promise.all([
+    resolves(workspace.path, workspace.target),
+    resolves(workspace.path, workspace.branch),
+  ])
+  const counted = target
+    ? branch
+      ? [`${workspace.target}..${workspace.branch}`, `${workspace.target}..HEAD`]
+      : [`${workspace.target}..HEAD`]
+    : branch
+      ? ['HEAD', '--not', workspace.branch]
+      : ['HEAD']
   return {
     id,
     uncommitted: (await git(workspace.path, 'status', '--porcelain')).split('\n').filter(Boolean)
       .length,
-    unlanded: Number(
-      await git(
-        workspace.path,
-        'rev-list',
-        '--count',
-        `${workspace.target}..${workspace.branch}`,
-        `${workspace.target}..HEAD`,
-      ),
-    ),
+    unlanded: Number(await git(workspace.path, 'rev-list', '--count', ...counted)),
   }
 }
 async function onDisk(path: string) {
@@ -145,6 +156,9 @@ async function atRisk(
   const branch = (await git(workspace.path, 'branch', '--list', workspace.branch))
     ? [workspace.branch]
     : []
+  // A target the repository no longer has cannot say which detached commits already landed: they all count, so the
+  // checkout is kept rather than losing them, and `reason` names the stale target instead of a Git error.
+  const target = await resolves(workspace.path, workspace.target)
   return {
     id,
     uncommitted: (await git(workspace.path, 'status', '--porcelain')).split('\n').filter(Boolean)
@@ -156,10 +170,15 @@ async function atRisk(
         '--count',
         'HEAD',
         '--not',
-        workspace.target,
+        ...(target ? [workspace.target] : []),
         ...branch,
       ),
     ),
+    ...(target
+      ? {}
+      : {
+          reason: `Target ${workspace.target} is gone, so every commit of its checkout counts as unlanded`,
+        }),
   }
 }
 const held = (
@@ -634,6 +653,8 @@ export function workspaces(host: Host) {
           workspace.branch,
           workspace.target,
         ).then(
+          // An ancestor Git cannot answer for, such as a target the repository no longer has, is not known to be
+          // merged: the branch stays, and recreating the checkout finds it.
           () => true,
           () => false,
         )
@@ -678,6 +699,8 @@ export function workspaces(host: Host) {
         const item: KeptWork = present
           ? await held(id, workspace, registered)
           : { id, uncommitted: 0, unlanded: 0 }
+        // A checkout whose target is gone counts what landed differently; the report says so instead of a Git error.
+        if (item.reason) host.notice(`Workspace #${id}: ${item.reason}`)
         if (retained.has(id)) item.descendant = retained.get(id)
         const reason = await host.harness().commit(async (tx) => {
           const live = await tx.doc(LiveDoc, id)

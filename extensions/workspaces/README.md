@@ -72,6 +72,9 @@ their subagents, for the sidebar's in-flight rows.
 target, including transitively owned subagents, for the warning before concluding. The `workspaces` service exposes
 `pending(ids, ctx)` and `release(ids, ctx)`; release removes every checkout that holds nothing only its folder
 holds: no uncommitted changes and no commits on HEAD that neither its branch nor the target has (detached work).
+A target its repository no longer has, such as a branch renamed after the checkout was recorded, cannot say what
+landed: every detached commit counts as unlanded, so that checkout is kept, and the release names the stale target in a
+notice instead of failing.
 Commits on its branch stay with the branch in the source, and the next input recreates the checkout on it. Release
 deletes merged branches and returns checkouts kept for that work or `busy` reasons (running or queued input). Descendants release before ancestors; a kept descendant also keeps its
 ancestors, reported with `descendant: <id>`. The removal transaction also checks current records sourced transitively

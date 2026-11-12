@@ -2338,6 +2338,41 @@ it.concurrent('release handles failed checkouts but never removes detached unlan
   expect(await git(workspace.path, 'rev-parse', 'HEAD')).toBe(tip)
 })
 
+it.concurrent('a target its repository no longer has never fails a release', async () => {
+  const f = await fixture()
+  const clean = await f.create()
+  const detached = await f.create()
+  for (const id of [clean, detached]) await f.service.ready(id, context)
+  // Records made before their repository renamed `master` to `main`: their target no longer resolves.
+  await f.opened.harness.commit(async (tx) => {
+    const items = (await tx.doc(Workspaces, ROOT_CONVERSATION_ID)).items
+    for (const id of [clean, detached]) items[String(id)].target = 'master'
+  }, context)
+  // Commits on its branch stay in the source with the branch, so a clean checkout goes and its branch stays.
+  const cleanWorkspace = (await f.service.get(clean, context))!
+  const cleanTip = await commit(cleanWorkspace.path)
+  expect(await f.service.pending([clean], context)).toEqual([])
+  expect(await f.service.release([clean], context)).toEqual([])
+  expect((await f.service.get(clean, context))!.state).toBe('removed')
+  expect(await git(f.projectRoot, 'rev-parse', cleanWorkspace.branch)).toBe(cleanTip)
+  // A detached commit lives only in its folder, and a target the repository does not have cannot prove it landed: it
+  // is kept, and the release names the stale target instead of a Git error.
+  const detachedWorkspace = (await f.service.get(detached, context))!
+  await git(detachedWorkspace.path, 'checkout', '--detach')
+  const tip = await commit(detachedWorkspace.path)
+  expect(await f.service.release([detached], context)).toEqual([
+    { id: detached, uncommitted: 0, unlanded: 1, reason: expect.stringContaining('master') },
+  ])
+  expect(f.notice).toHaveBeenCalledWith(expect.stringContaining('master'))
+  expect((await f.service.get(detached, context))!.state).toBe('ready')
+  expect(await git(detachedWorkspace.path, 'rev-parse', 'HEAD')).toBe(tip)
+  // A branch that is gone too leaves every commit of the folder counting, rather than a failed check.
+  await git(f.projectRoot, 'branch', '-D', detachedWorkspace.branch)
+  expect(await f.service.pending([detached], context)).toEqual([
+    { id: detached, uncommitted: 0, unlanded: 2 },
+  ])
+})
+
 it.concurrent('aborting release finishes the current checkout and leaves the remaining batch untouched', async () => {
   const f = await fixture()
   const ids = [await f.create(), await f.create(), await f.create()]

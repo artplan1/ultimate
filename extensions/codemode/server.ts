@@ -51,6 +51,7 @@ import type { CallSummary } from './refs.ts'
 import { PendingDoc, SummaryDoc } from './api.ts'
 import { fixedLine, parseSummary, SUMMARY_SYSTEM, summaryInput } from './summary.ts'
 import type { Call } from './summary.ts'
+import { machineLoad } from './load.ts'
 
 export const Store = defineDoc({
   kind: 'codemode.store',
@@ -256,9 +257,14 @@ function globals(
   }[] = [
     {
       name: 'system',
-      description: 'Current machine, process, persistence, resources and build identity.',
+      description:
+        'Current machine, process, persistence, resources and build identity, plus machine.load (the load average) and processes (the five processes using the most CPU of the whole machine, sampled now). Use it instead of uptime or ps to tell whether the machine is starved.',
       signature: '(): Promise<unknown>',
-      execute: () => host.system(),
+      execute: async () => {
+        const { load, processes } = await machineLoad()
+        const system = host.system()
+        return { ...system, machine: { ...system.machine, load }, processes }
+      },
     },
     {
       name: 'projects',

@@ -20,7 +20,7 @@ Successful nested subagent results may carry `details.answerId` (a durable answe
 
 Only inside codemode (not standalone model tools):
 
-- `ultimate.system()` — machine, process, persistence, resources, build identity.
+- `ultimate.system()` — machine, process, persistence, resources, build identity, plus `machine.load` (the load average) and `processes` (the five processes using the most CPU of the whole machine), both sampled when it is called: the read to reach for instead of `uptime` or `ps`.
 - `ultimate.projects()` — project folders, their top-level conversation summaries, and URL when running (JSON manifests only, not other stores' SQLite).
 - `ultimate.uiState()` — durable root-conversation UI state, so you can see what the user is looking at.
 - `ultimate.extensions()` — folders, facets, tools, sections, documents, load errors.

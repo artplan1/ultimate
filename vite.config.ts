@@ -31,6 +31,11 @@ export default defineConfig({
         },
       },
       {
+        // The fast suite's budgets are chosen here, so the rule reads this file too: a raise is a lint failure.
+        files: ['vite.config.ts'],
+        rules: { 'ultimate/no-test-timeout': 'error' },
+      },
+      {
         files: ['test/**', 'extensions/*/test/**'],
         excludeFiles: ['test/helpers.ts'],
         rules: { 'ultimate/no-local-test-polling': 'error' },

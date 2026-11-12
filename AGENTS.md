@@ -52,12 +52,15 @@ The mechanics are in [extensions/lineage/README.md](extensions/lineage/README.md
 - [Pi](docs/pi-upstream.md): upgrades and upstream couplings, its [searching Pi's
   code](docs/pi-upstream.md#searching-pis-code) first.
 
-## Push permission
+## Landing and pushing
 
-The top-level agent may commit verified work, land it and normally push the destination branch to `origin`
-(`HazAT/ultimate`), public or private, without asking; `workspace submit` runs checks and pushes. Subagents commit and
-report, never push. Never force-push, rewrite history or push secrets. This does not cover other repositories, releases,
-publishing, deployments or GitHub issue/PR changes ([a rejected push](docs/worktrees.md)).
+The top-level agent stops after changing repository files and running the checks that cover them: it names the changed
+paths, the checks and the risks, and asks the user to review the working tree. Committing, amending, landing, pushing
+and opening or changing a pull request wait for that approval, which covers exactly that handoff. `workspace submit`
+then merges, runs the source project's configured checks, fast-forwards the target branch and pushes it only when
+`lander.push` is set, which it is not here, so landings stay local and report "Not pushed." Subagents commit and report,
+never push. Never force-push, rewrite history or push secrets, and this covers no other repository's releases,
+publishing, deployments or GitHub issue/PR changes ([landing and pushing](docs/worktrees.md)).
 
 ## Conventions
 
@@ -76,10 +79,10 @@ publishing, deployments or GitHub issue/PR changes ([a rejected push](docs/workt
 - Tests live with what they test: an extension's in `extensions/<name>/test/` with `test/web/` and `test/e2e/`, the
   core's and cross-extension ones in the top-level `test/` with the shared helpers ([tests](docs/conventions.md#tests)).
 - `pnpm check` (format, lint, types; it fails on an import cycle or a core-tier extension depending on an optional one)
-  and the tests covering your change pass before a commit; the lander runs every suite. No real waits or spawned
-  processes in `pnpm test`; fix or delete a flaky test, never skip it or give it a longer timeout; wait with `until`
-  from `test/helpers.ts`, not a loop of your own; keep retired labels and surfaces out
-  ([checks and lint rules](docs/conventions.md#lint-rules)).
+  and the tests covering your change pass before a commit; the lander runs only `lander.checks` (here `pnpm check`), so
+  your branch owns its suites. No real waits or spawned processes in `pnpm test`; fix or delete a flaky test, never
+  skip it or give it a longer timeout; wait with `until` from `test/helpers.ts`, not a loop of your own; keep retired
+  labels and surfaces out ([checks and lint rules](docs/conventions.md#lint-rules)).
 - Every user-visible result is designed, not dumped: status and outcomes get a card matching the existing ones, never
   plain Markdown; write the expected look into the task and check screenshots against it
   ([cards](docs/conventions.md#designed-not-dumped)).

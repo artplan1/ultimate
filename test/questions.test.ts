@@ -334,7 +334,8 @@ describe('questions on a message', () => {
     expect((await f.log()).messages.find((m) => m.re === message!.id)?.text).toBe(
       'Later, after the demo.',
     )
-    const plain = (await f.ask(id, { text: 'What should the tab be called?' })).message!
+    const plain = (await f.ask(id, { text: 'What should the tab be called?', reply: true }))
+      .message!
     expect(plain.questions).toBeUndefined()
     await expect(f.answer({ messageId: plain.id, text: '  ' })).rejects.toThrow('Invalid answers')
     await expect(f.answer({ messageId: plain.id, text: 'x', note: 'y' })).rejects.toThrow(
@@ -385,7 +386,7 @@ describe('questions on a message', () => {
     const id = await f.ultimate()
     const first = (await f.ask(id, { text: 'Keep it running?', questions: [decisions[2]] }))
       .message!
-    const second = (await f.ask(id, { text: 'Which layout?' })).message!
+    const second = (await f.ask(id, { text: 'Which layout?', reply: true })).message!
     const before = (await f.entries(id)).filter((entry) => entry.kind === 'pi.assistant').length
     const { id: note } = await f.dismiss(first.id)
     await f.settled()

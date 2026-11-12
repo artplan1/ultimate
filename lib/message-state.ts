@@ -5,6 +5,16 @@
  */
 type Status = { reply: boolean; state: string; to: number | 'user' | 'remote' }
 
+/**
+ * Whether a message waits for its answer: to the user only when it asks questions, so a plain message is one-way
+ * instead of a card whose only action is dismissal; between agents unless its sender makes it one-way.
+ */
+export const waitsForReply = (input: {
+  to?: string
+  reply?: boolean
+  questions?: readonly unknown[]
+}): boolean => input.reply ?? (input.to === 'user' ? input.questions !== undefined : true)
+
 /** A reply-enabled message still waiting for its answer, whether delivered or still on its way. */
 export const isOpen = (message: Status) =>
   message.reply && (message.state === 'sent' || message.state === 'delivered')

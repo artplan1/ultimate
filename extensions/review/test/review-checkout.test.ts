@@ -64,6 +64,17 @@ it('reviews the subfolder repository a conversation works in, the project root b
     expect(shown.result.files.map((file: { path: string }) => file.path)).toEqual(['feature.txt'])
     // Without the conversation the same spec is asked of the project root, which is no repository: it says so.
     expect((await diff('uncommitted')).error).toMatch(/No Git repository in/)
+    // A commit's trailer is read in that checkout too: the review goes to the conversation the commit names.
+    await writeFile(join(app, 'b.txt'), 'two\n')
+    await git(app, 'add', '-A')
+    await git(app, 'commit', '-q', '-m', 'second', '-m', `Ultimate-Conversation: ${conversation}`)
+    const second = await git(app, 'rev-parse', 'HEAD')
+    const recipient = (
+      await post(server, '/api/extensions/review/actions/recipient', {
+        args: { spec: second, conversation },
+      })
+    ).data.result
+    expect(recipient).toEqual({ conversation })
   } finally {
     await server.close()
     await removeTemp(home)

@@ -35,7 +35,6 @@ import {
 import { Address } from '../messages/ui.tsx'
 import { compareUrl } from '../../lib/compare.ts'
 import { useGithubRepo } from '../workspaces/ui.tsx'
-import { Checkout } from './checkout.tsx'
 import { Composer, DraftCard } from './comment.tsx'
 import { draftsKey } from './comments.ts'
 import { useDrafts } from './drafts.ts'
@@ -483,19 +482,13 @@ export default function ReviewSurface() {
   const [stored, setLayout] = useExtensionUiState('layout', 'split')
   const layout = stored === 'unified' ? 'unified' : 'split'
   const phone = useViewport() === 'phone'
-  const { conversationId: current, switchConversation, showSurface } = useUltimate()
-  const [picked, setPicked] = useExtensionUiState<number | null>('conversation', null)
-  // Review reads the checkout of the conversation you are in until you pick another: a project root that is no
-  // repository of its own keeps its work in subfolder repositories, and the one to review is your conversation's.
-  const conversation = picked ?? current
-  // The diff runs in that checkout: the drafts are the conversation's for this spec.
-  const args: { spec: string; conversation?: number } = {
-    spec,
-    ...(conversation === undefined ? {} : { conversation }),
-  }
+  const { conversationId, switchConversation, showSurface } = useUltimate()
+  // Review reads the checkout of the conversation you are in: a project root that is no repository of its own keeps
+  // its work in subfolder repositories, and the one to review is your conversation's.
+  const args: { spec: string; conversation?: number } = { spec, conversation: conversationId }
   const diff = useAction(DiffAction, args, { onError: () => undefined })
   const github = useGithubRepo()
-  const [drafts, update] = useDrafts(draftsKey(spec, conversation))
+  const [drafts, update] = useDrafts(draftsKey(spec, conversationId))
   const suggested = useAction(RecipientAction, args, { onError: () => undefined })
   const to = drafts.to ?? suggested.data?.conversation
   const [sending, setSending] = useState(false)
@@ -572,15 +565,8 @@ export default function ReviewSurface() {
     <Frame
       controls={
         <>
-          <Checkout
-            onChange={(id) => {
-              setSent(undefined)
-              setPicked(id)
-            }}
-            value={conversation}
-          />
           <Selector
-            conversation={conversation}
+            conversation={conversationId}
             onChange={(next) => {
               setSent(undefined)
               setSpec(next)
@@ -648,7 +634,7 @@ export default function ReviewSurface() {
         ) : (
           <Diffs
             diff={data}
-            key={`${conversation}:${data.spec}`}
+            key={`${conversationId}:${data.spec}`}
             parsed={parsed}
             drafts={drafts}
             footer={footer}

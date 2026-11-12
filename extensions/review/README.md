@@ -1,9 +1,8 @@
 The Review surface: the local Git diffs of a conversation's checkout, its files on the left and their changes on the right, rendered with `@pierre/diffs` in Ultimate's fonts and colours.
 
-What it shows is a **spec**, read in one conversation's **checkout**: the conversation's ready worktree, else the
-repository that worktree branched from, else its own folder (`cwd`), else the project's checkout. A project root that
-is no repository of its own reviews the subfolder repository its conversations work in, and the header's checkout
-picker follows the conversation you are in until you pick another.
+What it shows is a **spec**, read in the **checkout** of the conversation you are in: its ready worktree, else the
+repository that worktree branched from, else its own folder (`cwd`), else the project's checkout. A project root that is
+no repository of its own reviews the subfolder repository its conversations work in.
 
 - `uncommitted`: the work tree against `HEAD`, untracked files included (ignored ones not). `uncommitted:<id>` is the
   same in conversation `id`'s checkout; its default recipient is `id`.
@@ -12,10 +11,9 @@ picker follows the conversation you are in until you pick another.
 - `branch:<name>`: the branch against the target branch it lands on (its worktree's target, else the branch the
   conversation's checkout is on).
 
-The header picks the checkout (the conversation you are in by default, or another) and the spec (recent choices from
-`ranges`, or any spec typed in), sums `+N −M · K files`, switches split and unified, and links the range to DiffsHub
-when `origin` is on GitHub. On a phone the file list is a dropdown and the diff is unified. The diff stack is
-virtualized; the viewer loads with the surface, not with the app.
+The header picks the spec (recent choices from `ranges`, or any spec typed in), sums `+N −M · K files`, switches split
+and unified, and links the range to DiffsHub when `origin` is on GitHub. On a phone the file list is a dropdown and the
+diff is unified. The diff stack is virtualized; the viewer loads with the surface, not with the app.
 
 **Comments.** Click a line number (shift-click or drag for a range, on either side) or the gutter `+` to open an
 inline composer; the range highlights as it grows, with a bar down its line numbers. **Add to review** keeps it as a

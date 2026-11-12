@@ -1,31 +1,19 @@
 ---
 name: ultimate-provider-smoke
-description: 'Use when a change depends on the provider or model itself: latency, streaming tool arguments, login or prompt caching.'
+description: Check a change whose behaviour depends on the provider or model itself (latency, streaming of tool arguments, a pinned agent model, login or fallback, prompt caching) on the models it is meant for, with one short real turn on a preview started with `model: null`. Use when a normal preview cannot show it because it runs every agent on one model; fall back to a supervised scratch server only for restart, core swap or other process-level behaviour.
 ---
 
 # Smoke-test the real provider
 
 A preview (`instance start`) normally runs every agent on `instance.model` through `ULTIMATE_MODEL`, which overrides
-agent pins, the root model and `summaryModel`. With `"instance": { "model": null }` it sets no `ULTIMATE_MODEL`, so
+agent pins, the root model and `summaryModel`. Started with `model: null` it sets no `ULTIMATE_MODEL`, so
 each agent runs on its configured model and provider (`extensions/instance/README.md`). That covers latency,
 streaming, pinned agent models, login or fallback, and prompt caching. Spend one or two short turns.
 
 ## Start a preview on the configured models
 
-The setting is read when the preview starts: the host's effective project settings take precedence over its user
-settings (normally `~/.ultimate/settings.json`), then the preview-family default applies (`docs/settings.md`,
-`extensions/instance/server.ts`, `previewModelSetting`). The host's project scope, not the branch checkout's settings,
-selects the override. A user-level `null` cannot override a project-level model.
-
-1. Read those settings to identify the effective scope. If it already sets `instance.model` to `null`, leave it alone.
-   Otherwise obtain authorisation to change that scope temporarily and start the preview. A branch that cannot edit
-   host project settings must ask/report the blocker, not write an ineffective user override or substitute a server.
-2. Before any authorised edit, record the exact prior `instance.model` value or its absence, and whether `instance`
-   itself existed. Set only `instance.model` to `null`; preserve other `instance` fields and unrelated settings.
-3. `instance start` from your workspace. Record the returned instance id, URL and home.
-4. Immediately after the start attempt, including on failure, restore the recorded value or remove only the model
-   field you added. Remove a newly created `instance` object only if it is now empty; never delete a pre-existing
-   object or overwrite unrelated settings. Verify the restoration. A running preview keeps its selected models.
+`instance start` with `model: null` from your workspace; note its URL and home. The argument applies to this preview
+only: never edit `~/.ultimate/settings.json` for it, since every other preview started meanwhile would read the change.
 
 To try a different model, set it the way a user would: an agent definition or a project setting in the checkout,
 or the composer's model picker in the preview. Logins are read from `~/.pi/agent` and Claude Code's own login, never
@@ -83,7 +71,7 @@ trace also lists background calls such as titles and summaries on `summaryModel`
 
 ## Clean up
 
-- Preview: `instance stop`, and check `~/.ultimate/settings.json` is back as it was (step 3).
+- Preview: `instance stop`.
 - Scratch server: `kill <supervisor pid>` (not `pkill -f`: the pattern matches your own shell), then
   `rm -rf $H $H.log`.
 

@@ -51,11 +51,11 @@ composer renderers), `commands.md`, `documents.md`, `surfaces.md`, `actions.md`,
 ## 5. Verify
 
 1. Server actions first: call them with codemode `ultimate.action(extension, action, args)`.
-2. `pnpm check` in the clone (format, lint, types, import boundaries, the dependency graph). It covers that clone's
-   `extensions/` and `.ultimate/extensions/`, not an extension in another project, user directory or separate
-   checkout: for one of those, read its package's scripts and TypeScript includes, run the checks that actually
-   cover the changed files and report any coverage gap. A successful clone check is not external-extension
-   validation; do not add a harness, dependency or check script without separate authorisation.
+2. In the clone, `pnpm check` (format, lint, types, import boundaries, the dependency graph). For an extension of another
+   project or a user extension, `node <clone>/scripts/check-extension.ts [folder…]` from the project (default: its
+   `.ultimate/extensions/*`) type-checks it against the clone. Never copy an extension into the clone to check it: the
+   running host would load it. A successful clone check is not external-extension validation; do not add a harness,
+   dependency or check script without separate authorisation.
 3. Tests for behaviour behind it: fast tests in the extension's own `test/` folder (`extensions/<name>/test/`), no
    real waits; run them alone with `pnpm test extensions/<name>/` (see "Tests" in `extensions/README.md`).
 4. Look at it: follow the `verify-ui` skill (a preview of your checkout for anything outside the running host).

@@ -878,6 +878,8 @@ it.concurrent('emits one landed event and notes the root once, across a replayed
       sha,
       base: expect.any(String),
       target: 'main',
+      // The target had not moved since the submit, so the landed commit is the submitted tip itself.
+      submitted: sha,
       lander: (await landerLog(f)).id,
       divergence: 'Added a landing file instead of changing the UI.',
       title: 'Write the feature',
@@ -905,6 +907,7 @@ it.concurrent('emits one landed event and notes the root once, across a replayed
     at: submittedAt,
     divergence: 'Added a landing file instead of changing the UI.',
     sha,
+    submitted: sha,
     target: 'main',
     title: 'Write the feature',
     summary: 'Adds the landed file.',

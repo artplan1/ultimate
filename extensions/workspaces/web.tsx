@@ -16,6 +16,7 @@ function LandingNote({ entry }: { entry: EntryRecord }) {
     at,
     divergence,
     sha,
+    submitted,
     base,
     target,
     title,
@@ -31,6 +32,7 @@ function LandingNote({ entry }: { entry: EntryRecord }) {
     at?: number
     divergence?: string
     sha: string
+    submitted?: string
     base?: string
     target: string
     title?: string
@@ -62,6 +64,7 @@ function LandingNote({ entry }: { entry: EntryRecord }) {
       <LandingCard
         card={entry.id}
         sha={sha}
+        submitted={submitted}
         from={from}
         sourceEntry={at}
         divergence={divergence}

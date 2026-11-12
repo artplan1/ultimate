@@ -44,6 +44,11 @@ export type LandedData = {
   sha: string
   base: string
   target: string
+  /**
+   * The tip handed over at submit time. `sha` is that tip itself when the target had not moved since; otherwise it is the
+   * merge of it onto the target, and the receipt names both, so the submitter can see its own commit landed.
+   */
+  submitted: string
   /** The lander conversation that landed it. */
   lander: number
   divergence: string

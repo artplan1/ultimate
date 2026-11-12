@@ -465,6 +465,7 @@ export function createLander(
                 sha: outcome.sha!,
                 base: outcome.base!,
                 target: entry.target,
+                submitted: entry.tip,
                 lander: runtime.conversationId,
                 divergence: entry.divergence,
                 title:

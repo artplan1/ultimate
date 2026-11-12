@@ -93,6 +93,7 @@ export {
   useConversation,
   useConversations,
   useConversationSummary,
+  useDarkTheme,
   useDialog,
   useDoc,
   useDocKind,
@@ -122,6 +123,8 @@ export type { EventContext, EventData, EventRecord, EventToken } from '../../../
 export { touchKeyboard, useViewport } from './viewport.ts'
 export type { Viewport } from './viewport.ts'
 export type { Connection, State } from './store.ts'
+export { resolvedTheme } from './theme.ts'
+export type { ThemePreference } from './theme.ts'
 export type { DocumentItem } from './registry.ts'
 export {
   elidePath,

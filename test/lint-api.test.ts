@@ -278,3 +278,41 @@ const later = () => import('../questions/web.tsx')`
   expect(lint('core-tier-deps', 'extensions/phase/web.tsx', source)).toEqual([])
   expect(lint('core-tier-deps', 'test/example.test.ts', source)).toEqual([])
 })
+
+const overrideMessage =
+  'AGENTS.md: Keep pnpm test fast; fix or delete a flaky test rather than raising its timeout. Do not override test timeouts.'
+const budgetMessage = (name: string, seconds: number) =>
+  `AGENTS.md: Keep pnpm test fast; the fast suite's ${name} is ${seconds} s, and raising it means raising it in this rule too. Fix, split or delete a slow test instead.`
+
+it('keeps the fast suite to its budgets in its own config, and only there', () => {
+  // The budgets as established, and a lower one, pass: only raising one is a failure.
+  expect(
+    lint(
+      'no-test-timeout',
+      'vite.config.ts',
+      `export default { test: { testTimeout: 30000, hookTimeout: 5000, teardownTimeout: 5000 } }`,
+    ),
+  ).toEqual([])
+  expect(
+    lint('no-test-timeout', 'vite.config.ts', `export default { test: { testTimeout: 20_000 } }`),
+  ).toEqual([])
+  // A raise, and a 0 that turns the timeout off altogether, are caught.
+  expect(
+    lint(
+      'no-test-timeout',
+      'vite.config.ts',
+      `export default { test: { testTimeout: 60_000, hookTimeout: 0 } }`,
+    ),
+  ).toEqual([budgetMessage('testTimeout', 30), budgetMessage('hookTimeout', 5)])
+  // A test keeps the timeouts it always set, and fixture data named after a budget is none of the rule's business.
+  expect(
+    lint(
+      'no-test-timeout',
+      'test/example.test.ts',
+      `vi.setConfig({ testTimeout: 30_000 })
+it('lands', run, 5000)
+it('waits', { timeout: 10_000 }, run)
+const fixture = { testTimeout: 60_000 }`,
+    ),
+  ).toEqual([overrideMessage, overrideMessage, overrideMessage])
+})

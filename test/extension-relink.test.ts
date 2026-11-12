@@ -129,3 +129,50 @@ export default { name: 'linked' }
     await server.close()
   }
 })
+
+it('loads an extension a reload of another one discovers when the folder event never came', async () => {
+  const home = await temp()
+  homes.push(home)
+  const projectRoot = join(home, 'project')
+  await mkdir(projectRoot)
+  const dir = join(home, 'real', 'linked')
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    join(dir, 'server.ts'),
+    `export const actions = { which: () => 'linked' }
+export default { name: 'linked' }
+`,
+  )
+  await mkdir(join(home, '.ultimate/extensions'), { recursive: true })
+  await symlink(dir, join(home, '.ultimate/extensions/linked'))
+  const server = await fauxServer({
+    ultimateRoot: resolve('.'),
+    projectRoot,
+    userHome: home,
+    home: join(home, 'state'),
+  })
+  try {
+    expect(server.extensions.action('linked', 'which')?.({}, {} as never)).toBe('linked')
+    // A folder that appears while the loader hears nothing about it: the live host loses such an event when a symlink
+    // is renamed onto a folder it has just written.
+    server.vite.watcher.unwatch(join(home, '.ultimate/extensions'))
+    const added = join(home, 'real', 'newext')
+    await mkdir(added, { recursive: true })
+    await writeFile(
+      join(added, 'server.ts'),
+      `export const actions = { which: () => 'newext' }
+export default { name: 'newext' }
+`,
+    )
+    await symlink(added, join(home, '.ultimate/extensions/newext'))
+    // The next save in the extension that is loaded reloads only it; discovery still sees the new folder.
+    server.vite.watcher.emit('change', join(dir, 'server.ts'))
+    const record = () => server.extensions.info().find((entry) => entry.name === 'newext')
+    await until(() => !!record())
+    expect(record()?.server).toBeDefined()
+    expect(record()?.server?.error).toBeUndefined()
+    expect(server.extensions.action('newext', 'which')?.({}, {} as never)).toBe('newext')
+  } finally {
+    await server.close()
+  }
+})

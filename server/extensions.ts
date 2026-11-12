@@ -574,7 +574,9 @@ export async function loadExtensions(
         facets: { server: files.includes('server.ts'), web: files.includes('web.tsx') },
         ...(previous?.server ? { server: previous.server } : {}),
       }
-      if (enabled && record.facets.server && (!servers || servers.has(name))) {
+      // `servers` picks which loaded servers this reload re-reads; one that has none yet loads whatever selected it, or
+      // an extension found by a reload of another one stayed enabled with its tools missing and nothing said so.
+      if (enabled && record.facets.server && (!servers || servers.has(name) || !record.server)) {
         const facetHost = scope(name)
         try {
           // Vite keeps a URL bound to the file it first resolved to, so a repointed link loads by its target.

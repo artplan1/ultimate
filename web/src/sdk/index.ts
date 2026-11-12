@@ -113,6 +113,7 @@ export {
   useStore,
   useSystem,
   useTasks,
+  useTheme,
   useToolDuration,
   useTranscript,
   useUiState,
@@ -124,6 +125,7 @@ export type { EventContext, EventData, EventRecord, EventToken } from '../../../
 export { touchKeyboard, useViewport } from './viewport.ts'
 export type { Viewport } from './viewport.ts'
 export type { Connection, State } from './store.ts'
+export type { ThemePreference } from './theme.ts'
 export type { DocumentItem } from './registry.ts'
 export {
   elidePath,

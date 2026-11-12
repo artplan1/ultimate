@@ -248,7 +248,7 @@ export default function messages(host: ExtensionHost) {
           starter === undefined
             ? ''
             : ` #${starter} started you: when you stop with nothing under way (no subagent, landing or reply pending), your final answer goes to it and wakes it; while work is under way it arrives as a note, and so do your one-way messages to it.`
-        return `Use message to contact #id or @name. @ultimate and branches may message user. Messages wake their recipient; its answer returns as a reply and wakes you. End your turn instead of waiting. A one-way message (reply: false) gets no answer; use reply: true when you need one. Inputs identify their sender; answer here and your answer is sent to the sender automatically; do not use message to reply. A message to an agent whose message you still owe an answer becomes that answer and ends your run; use it only to attach images.${upward}\n${agents.map((a) => `@${a.name} — ${a.description}`).join('\n')}`
+        return `Use message to contact #id or @name. @ultimate and branches may message user. Messages wake their recipient; its answer returns as a reply and wakes you. End your turn instead of waiting. To the user a message is one-way unless it asks questions (its card, which waits for them) or passes reply: true; between agents it waits for an answer unless reply: false makes it a one-way update. Inputs identify their sender; answer here and your answer is sent to the sender automatically; do not use message to reply. A message to an agent whose message you still owe an answer becomes that answer and ends your run; use it only to attach images.${upward}\n${agents.map((a) => `@${a.name} — ${a.description}`).join('\n')}`
       }),
       // Only @ultimate can tell; the list changes when a project or a standing agent is added, not per turn.
       section('projects', async (input, ctx) => {
@@ -262,11 +262,16 @@ export default function messages(host: ExtensionHost) {
       defineTool({
         name: 'message',
         description:
-          'Send a message to #id or @name; it returns immediately. A busy recipient gets it after its current run, or during it with steer: true (the default for @ultimate). images forwards screenshots or other images from your conversation, to an agent or to the user. To an agent or the user whose message you owe an answer, it is that answer (with its images and questions) and ends your run.',
+          'Send a message to #id or @name; it returns immediately. A busy recipient gets it after its current run, or during it with steer: true (the default for @ultimate). reply waits for its answer: to the user only when the message asks questions, so a plain message is one-way; between agents it waits unless false. images forwards screenshots or other images from your conversation, to an agent or to the user. To an agent or the user whose message you owe an answer, it is that answer (with its images and questions) and ends your run.',
         parameters: obj({
           to: str(),
           text: str({ minLength: 1 }),
-          reply: opt(bool()),
+          reply: opt(
+            bool({
+              description:
+                'Wait for its answer: to the user only when it asks questions (a plain message is one-way, not a card); between agents unless false.',
+            }),
+          ),
           steer: opt(bool()),
           images: opt(imagesParameter),
           questions: opt(questionsParameter),

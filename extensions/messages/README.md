@@ -14,11 +14,12 @@ conversation as `#123` or `123`, a standing agent as `@name`, or `user`.
 - **Delivery.** An idle recipient wakes. A busy one gets a follow-up after its current run, or steering with
   `steer: true`, the default for @ultimate's messages and `false` for everyone else. A message to a concluded
   conversation resumes it.
-- **Answers.** With `reply` (the default) the recipient's final answer returns as a `board.reply`, steering the sender;
+- **Answers.** With `reply` the recipient's final answer returns as a `board.reply`, steering the sender;
   an unanswered input returns a `failed` reply, or `stopped` when a person pressed Stop. Answer directly instead of
   messaging the sender: a reply-enabled message back to a sender whose message you have read and owe becomes that
   answer and ends your run. A message still queued is unread and never owed. `reply: false` is one-way: it wakes the
-  recipient and returns nothing.
+  recipient and returns nothing. Between agents a message waits for its answer unless one-way; to `user` it is
+  one-way unless it asks `questions` or passes `reply: true` ([messages to the user](#messages-to-the-user)).
 - **Images.** `images` forwards images from the sender's own conversation: `'latest'` takes the newest entry with
   images (a pasted input or a screenshot tool result), a number names that entry. At most `maxImages`, each at most
   `maxImageBytes`. `branch` takes `images` for its first message too.
@@ -49,9 +50,11 @@ message to @ultimate open; @ultimate messaging or concluding it clears that.
 
 ### Messages to the user
 
-A message to `user` shows in the sender's transcript and starts no run. For @ultimate it is its answer: the run ends
-without restating it, unless a reply-enabled message it has read is still open. While a user's message it has read is
-open, @ultimate's message to the user answers it and, with `questions`, stays open itself, so it can ask one card after
+A message to `user` shows in the sender's transcript and starts no run. It is one-way unless it asks `questions` (its
+answer card, which waits for them) or passes `reply: true`: a card whose only action would be dismissal is not worth
+opening, so a plain report waits for nothing. For @ultimate a message to the user is its answer: the run ends without
+restating it, unless a reply-enabled message it has read is still open. While a user's message it has read is open,
+@ultimate's message to the user answers it and, with `questions`, stays open itself, so it can ask one card after
 another.
 
 A reply-expected message to the user stays open, and its sender shows as awaiting reply, until the user answers that
@@ -81,8 +84,8 @@ recorded in `board.started`. Without `isolated` the branch gets its own worktree
 isolate; in a project outside Git (its repositories only in subfolders) it runs in the shared folder instead, and an
 explicit `isolated: true` there still fails with "Isolation needs a Git repository".
 
-A branch's decisions go to @ultimate first, which weighs in; the branch then asks the user with a reply-expected message
-with `questions` in its own conversation. Reports that need no answer use `reply: false`.
+A branch's decisions go to @ultimate first, which weighs in; the branch then asks the user with a message with
+`questions` in its own conversation. Reports that need no answer are one-way by themselves.
 
 ## Other projects' Ultimates
 

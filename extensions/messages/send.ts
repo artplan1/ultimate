@@ -8,7 +8,7 @@ import { Messages, MessageSent } from './api.ts'
 import type { Question } from './api.ts'
 import type { Via } from './refs.ts'
 import { checkQuestions, gist, openQuestion } from './questions.ts'
-import { isOwed } from '../../lib/message-state.ts'
+import { isOwed, waitsForReply } from '../../lib/message-state.ts'
 import { UserInputEvent } from '../../shared/events.ts'
 import type { Device } from '../../shared/events.ts'
 import { resolveImages } from './images.ts'
@@ -108,6 +108,8 @@ export async function send(
   if (input.questions !== undefined && (input.to !== 'user' || input.reply === false))
     throw new Error('questions go only with a reply-expected message to the user')
   const questions = input.questions === undefined ? undefined : checkQuestions(input.questions)
+  // A message to the user waits for their answer only when it asks questions; between agents it waits unless one-way.
+  const reply = waitsForReply({ to: input.to, reply: input.reply, questions })
   if (parent !== undefined && input.to.replace(/^#/, '') !== String(parent))
     throw new Error(
       `Subagents report to the conversation that started them: message only #${parent}. Your final answer reaches it anyway.`,
@@ -193,7 +195,7 @@ export async function send(
       from,
       to,
       text: input.text,
-      reply: input.reply ?? true,
+      reply,
       state: to === 'user' ? 'delivered' : 'sent',
       ...(re === undefined ? {} : { re }),
       ...(callId === undefined ? {} : { call: callId }),

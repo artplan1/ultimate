@@ -58,9 +58,10 @@ import {
 } from './data.tsx'
 import { cacheBusts } from '../../lib/context-usage.ts'
 import { imagesOf } from '../../lib/entries.ts'
+import { waitsForReply } from '../../lib/message-state.ts'
 import { callerOf } from './caller.ts'
 import { MessagesDoc } from './refs.ts'
-import type { Message, Remote } from './refs.ts'
+import type { Message, Question, Remote } from './refs.ts'
 import { MessageAnswers } from './points.tsx'
 
 /** What an optional extension shows under a message to the user: questions' answer card. */
@@ -424,11 +425,12 @@ export function MessageCall({ call, core }: { call: ToolCallView; core: ReactNod
   if (call.status === 'error' || call.status === 'interrupted') return core
   const sent = /^Message (\d+) sent\.$/.exec(call.output)
   const message = sent ? log?.messages.find((m) => m.id === Number(sent[1])) : undefined
-  const { to, text, reply, steer } = call.args as {
+  const { to, text, reply, steer, questions } = call.args as {
     to?: string
     text?: string
     reply?: boolean
     steer?: boolean
+    questions?: Question[]
   }
   const recipient = message?.to ?? (to === 'user' ? 'user' : undefined)
   const toUser = recipient === 'user'
@@ -486,7 +488,9 @@ export function MessageCall({ call, core }: { call: ToolCallView; core: ReactNod
             )}
           </span>
           <span>
-            {(message?.reply ?? reply ?? true) ? 'expects reply' : 'one-way'}
+            {(message?.reply ?? waitsForReply({ to, reply, questions }))
+              ? 'expects reply'
+              : 'one-way'}
             {steer && ' · steer'}
             {message?.images && ` · ${imageCount(message.images.count)}`}
           </span>

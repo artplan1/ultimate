@@ -840,7 +840,7 @@ it("ends @ultimate's run with its message to the user, unless it still owes a re
 })
 it('atomically admits only one answer-card reply through the Messages service', async () => {
   const f = await fixture()
-  await f.send('user', 'Keep it running?')
+  await f.send('user', 'Keep it running?', { reply: true })
   const id = (await f.log())!.messages.at(-1)!.id
   const results = await Promise.allSettled([
     f.service().answer(id, 'Q: Keep it running?\nA: Yes', context),
@@ -856,6 +856,55 @@ it('atomically admits only one answer-card reply through the Messages service', 
     (await f.log())!.messages.filter((message) => message.re === id && message.from === 'user'),
   ).toHaveLength(1)
   expect((await f.log())!.messages.find((message) => message.id === id)?.state).toBe('answered')
+})
+
+it('keeps a message to the user that asks nothing one-way instead of a card to dismiss', async () => {
+  const f = await fixture()
+  await f.opened.harness.commit(async (tx) => {
+    ;(await tx.doc(Standing, ROOT_CONVERSATION_ID)).ultimate = f.recipient.id
+  }, context)
+  const ask = async (args: Record<string, unknown>) => {
+    await (
+      await f.recipient.submit(
+        { type: 'input', content: 'SEND ' + JSON.stringify({ to: 'user', ...args }) },
+        context,
+      )
+    ).wait(context)
+    return (await f.log())!.messages.at(-1)!
+  }
+  // Cards the user could only dismiss: a report asks nothing, so nothing waits on them.
+  expect(await ask({ text: 'Landed.' })).toMatchObject({
+    to: 'user',
+    reply: false,
+    state: 'delivered',
+  })
+  expect(await f.service().openQuestions(context)).toEqual([])
+  // A decision goes as `questions`: its card waits for the user.
+  const card = await ask({
+    text: 'Ship it?',
+    questions: [{ text: 'Ship it?', kind: 'confirm' }],
+  })
+  expect(card).toMatchObject({ to: 'user', reply: true, state: 'delivered' })
+  expect(await f.service().openQuestions(context)).toMatchObject([
+    { message: card.id, conversation: f.recipient.id },
+  ])
+  // A plain text question still waits for its answer when it asks for one.
+  const plain = await ask({ text: 'Which name?', reply: true })
+  expect(plain).toMatchObject({ to: 'user', reply: true, state: 'delivered' })
+  expect((await f.service().openQuestions(context)).map((open) => open.message)).toEqual([
+    card.id,
+    plain.id,
+  ])
+  // Between agents a message still waits for its answer unless its sender makes it one-way.
+  await (
+    await f.recipient.submit(
+      { type: 'input', content: 'SEND ' + JSON.stringify({ to: '#1', text: 'Progress' }) },
+      context,
+    )
+  ).wait(context)
+  const progress = async () => (await f.log())!.messages.find((m) => m.text === 'Progress')
+  expect(await progress()).toMatchObject({ from: f.recipient.id, to: 1, reply: true })
+  await until(async () => (await progress())?.state === 'answered')
 })
 
 it('lets a subagent message only the conversation that started it', async () => {

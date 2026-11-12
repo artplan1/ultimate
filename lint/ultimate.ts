@@ -257,6 +257,10 @@ export default {
     'no-test-timeout': {
       meta: { schema: [] },
       create(context: Context) {
+        // The fast suite's budgets are chosen once, in vite.config.ts: a raise there cannot pass silently, and 0 turns
+        // the timeout off, which is the largest budget there is. Moving a budget means moving it here too.
+        const config = path.relative(process.cwd(), context.filename) === 'vite.config.ts'
+        const budgets: Record<string, number> = { testTimeout: 30000, hookTimeout: 5000 }
         return {
           CallExpression(node: Node) {
             const callee = node.callee
@@ -281,6 +285,18 @@ export default {
                 message:
                   'AGENTS.md: Keep pnpm test fast; fix or delete a flaky test rather than raising its timeout. Do not override test timeouts.',
               })
+          },
+          Property(node: Node & { value: Node }) {
+            if (!config) return
+            const name = node.computed ? node.key?.value : (node.key?.name ?? node.key?.value)
+            const value = node.value.value
+            if (typeof name !== 'string' || typeof value !== 'number') return
+            const budget = budgets[name]
+            if (budget === undefined || (value !== 0 && value <= budget)) return
+            context.report({
+              node,
+              message: `AGENTS.md: Keep pnpm test fast; the fast suite's ${name} is ${budget / 1000} s, and raising it means raising it in this rule too. Fix, split or delete a slow test instead.`,
+            })
           },
         }
       },

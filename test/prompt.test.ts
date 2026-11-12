@@ -4,9 +4,21 @@ import { expect, it, vi } from 'vitest'
 import { context } from '../server/harness.ts'
 import { fauxServer, temp, removeTemp, until } from './helpers.ts'
 
+/** The folder and names the building_blocks section lists as available but off. */
+function offFolders(section: string) {
+  return new Map(
+    section
+      .split('\n')
+      .filter((line) => line.startsWith('- '))
+      .map((line): [string, string] => {
+        const [folder, names] = line.slice(2).split(': ')
+        return [folder, names]
+      }),
+  )
+}
 /** The extension names the building_blocks section lists as available but off. */
 function offNames(section: string) {
-  return section.split('\n')[0].split(': ').pop()!.replace(/\.$/u, '').split(', ')
+  return [...offFolders(section).values()].flatMap((names) => names.split(', '))
 }
 
 it('renders only enabled guidance, lists off building blocks, and adds self guidance live', async () => {
@@ -27,8 +39,12 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
   }
   const projectRoot = join(home, 'project')
   await mkdir(join(projectRoot, '.ultimate'), { recursive: true })
+  // An extension outside the clone: the section must name the folder it really is in.
+  const lab = join(home, '.ultimate/extensions/extra-lab')
+  await mkdir(lab, { recursive: true })
+  await writeFile(join(lab, 'README.md'), 'An extra lab.\n')
   const settings = join(projectRoot, '.ultimate/settings.json')
-  await writeFile(settings, JSON.stringify({ extensions: { disable: ['self'] } }))
+  await writeFile(settings, JSON.stringify({ extensions: { disable: ['self', 'extra-lab'] } }))
   const server = await fauxServer({
     ultimateRoot: resolve('.'),
     projectRoot,
@@ -58,15 +74,25 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
     const withoutSelf = await render()
     expect(withoutSelf.self).toBeUndefined()
     expect(offNames(withoutSelf.building_blocks)).toContain('self')
+    expect(offNames(withoutSelf.building_blocks)).toContain('extra-lab')
+    // A user folder is listed as itself, not as the clone's extensions folder.
+    expect(
+      offFolders(withoutSelf.building_blocks).get(`${join(home, '.ultimate/extensions')}/`),
+    ).toBe('extra-lab')
 
     await writeFile(settings, '{}')
     server.vite.watcher.emit('change', settings)
-    await until(() => !!server.host.registry.snapshot().extension('self'))
+    // Each extension lands on its own: wait until the section itself reports the reload.
+    await until(async () => !offNames((await render()).building_blocks).includes('extra-lab'))
     const withSelf = await render()
     expect(withSelf.self).toBeDefined()
     // Only the default-off built-ins are left to list.
     expect(offNames(withSelf.building_blocks)).not.toContain('self')
+    expect(offNames(withSelf.building_blocks)).not.toContain('extra-lab')
     expect(offNames(withSelf.building_blocks)).toContain('sounds')
+    expect([...offFolders(withSelf.building_blocks).keys()]).toEqual([
+      `${server.host.ultimateRoot}/extensions/`,
+    ])
 
     const checkout = join(home, 'isolated-work')
     await mkdir(checkout)

@@ -25,7 +25,10 @@ says what it was still waiting for, where a local loop fails with a bare timeout
 `pnpm check` is format, lint and types, then `pnpm deps` (import boundaries; it fails on a cycle or a core-tier
 extension depending on an optional one) and `pnpm pi-upstream`. The rules guarding these pages, and what each catches:
 
-- `ultimate/no-test-timeout` — `it('lands', run, 5000)` or `vi.setConfig({ testTimeout: 30_000 })`.
+- `ultimate/no-test-timeout` — `it('lands', run, 5000)`, `it('lands', { timeout: 5000 }, run)`,
+  `vi.setConfig({ testTimeout: 30_000 })`, or a `testTimeout`/`hookTimeout` above the fast suite's 30 s and 5 s in
+  `vite.config.ts`: a budget may be lowered and never raised, and raising one means raising it in the rule too
+  (`test/lint-api.test.ts`).
 - `ultimate/no-real-wait-in-fast-tests` — `child_process` in a fast test, or `await setTimeout(…)` without
   `vi.useFakeTimers()`. A justified exception carries a `fast-test-reason: …` comment above it
   (`test/process-group.test.ts`).

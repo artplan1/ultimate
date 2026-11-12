@@ -61,9 +61,9 @@ draft})`, so the post or close Daniel picks sends exactly that text.
 ## 5. Merge, if it merges
 
 After the go, keep the `--no-ff` merge from step 2 so the author's commits stay as they are (no squash, rebase or
-amend), and `workspace submit` it: the lander runs every check on the merged result and pushes. Fixes of your own go
-in separate commits after the merge; one that works around something names its origin (the PR number, the upstream
-issue) and intent in a comment at the code.
+amend), and `workspace submit` it: the lander runs the project's configured checks on the merged result and pushes when
+`lander.push` is set. Fixes of your own go in separate commits after the merge; one that works around something names
+its origin (the PR number, the upstream issue) and intent in a comment at the code.
 
 ## GitHub actions are not yours
 

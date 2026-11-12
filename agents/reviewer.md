@@ -43,7 +43,7 @@ Disagreements:
 
 ## Reviewing alone
 
-Otherwise start nobody. In range mode inspect `git log` and `git diff <base>..<head>` read-only; in explicit working-tree mode follow the snapshot contract above. Trace the unchanged logic the changes rely on before judging correctness, security, regressions and acceptance gaps. Run only safe, read-only checks: no edits, formatters, mutation-capable tests, commits or pushes. Do not run the test suites: the submitter ran them and the lander runs them on the merged result; read their output in the transcript instead.
+Otherwise start nobody. In range mode inspect `git log` and `git diff <base>..<head>` read-only; in explicit working-tree mode follow the snapshot contract above. Trace the unchanged logic the changes rely on before judging correctness, security, regressions and acceptance gaps. Run only safe, read-only checks: no edits, formatters, mutation-capable tests, commits or pushes. Do not run the test suites: the submitter ran them and the lander runs only the source project's configured `lander.checks`, which need not include them; read their output in the transcript instead.
 
 Report only concrete issues the reviewed changes introduce, by priority, with file:line, impact, evidence and a fix; no speculation or unrelated existing defects.
 

@@ -40,6 +40,7 @@ import { Metadata } from '../../../server/metadata.ts'
 import { UiState } from '../../../server/ui-state.ts'
 import { discoverAgents, parseDefinition, serializeDefinition } from '../../../lib/agents.ts'
 import { ProjectTrustStore } from '@earendil-works/pi-coding-agent'
+import { writeFamilies } from '../../../lib/families-settings.ts'
 
 const directories: string[] = []
 const hosts: OpenHost[] = []
@@ -78,7 +79,7 @@ async function fixture(
     ultimateRoot,
     userHome,
     home: join(ultimateRoot, 'home'),
-    faux: fauxProvider(),
+    faux: fauxProvider({ models: [{ id: 'faux-1' }, { id: 'faux-2' }] }),
   })
   prepared.registry.install(CodingTools)
   if (extension) prepared.registry.install(extension)
@@ -401,21 +402,50 @@ it('names the definitions when start omits agent, for every argument shape seen 
   expect(await children(f.opened)).toHaveLength(0)
 })
 
+it('keeps a named worker on its configured family unless a model is explicitly chosen', async () => {
+  const f = await fixture()
+  await writeFile(
+    join(f.ultimateRoot, 'agents/worker.md'),
+    '---\nname: worker\ndescription: Implement\nfamily: tiny\ntools: [read, bash]\n---\nImplement the task.\n',
+  )
+  await writeFamilies(f.userHome, f.prepared.projectRoot, {
+    families: { tiny: { model: 'faux/faux-2' } },
+  })
+  for (const [override, expected] of [
+    [undefined, 'faux-2'],
+    ['faux/faux-1', 'faux-1'],
+  ] as const) {
+    await call(f.opened, {
+      action: 'start',
+      agent: 'worker',
+      task: 'Implement',
+      ...(override ? { model: override } : {}),
+    })
+    const child = (await children(f.opened)).at(-1)!
+    const conversation = (await f.opened.harness.conversation(child.conversationId, context))!
+    expect((await conversation.agent(context)).model).toEqual({
+      provider: 'faux',
+      modelId: expected,
+    })
+    expect((await conversation.agent(context)).instructions).toBe('Implement the task.')
+  }
+})
+
 it('makes an agent on the fly from the call, read-only without a worktree, and refuses a model without a login', async () => {
   const f = await fixture()
   const noLogin = await call(f.opened, {
     action: 'start',
     label: 'dead-code scan',
-    family: 'review',
+    model: 'openai-codex/gpt-6-astra',
     tools: ['read', 'bash'],
     task: 'Scan',
   })
-  expect(noLogin.text).toContain('No login for openai-codex/gpt-6-astra (family review)')
+  expect(noLogin.text).toContain('No login for openai-codex/gpt-6-astra')
   expect(await children(f.opened)).toHaveLength(0)
   await call(f.opened, {
     action: 'start',
     label: 'dead-code scan',
-    model: 'faux/faux-1',
+    model: 'faux/faux-2',
     thinking: 'low',
     tools: ['read', 'bash'],
     instructions: 'List unused exports.',
@@ -427,15 +457,27 @@ it('makes an agent on the fly from the call, read-only without a worktree, and r
     context,
   )
   expect(agent.tools.map((tool) => tool.name).toSorted()).toEqual(['bash', 'read'])
-  expect(agent.model).toEqual({ provider: 'faux', modelId: 'faux-1' })
+  expect(agent.model).toEqual({ provider: 'faux', modelId: 'faux-2' })
   expect(agent.instructions).toMatch(/^You were made for one task[\s\S]*List unused exports\.$/)
   expect(agent.cwd).toBe((await f.opened.root.agent(context)).cwd)
   expect(await f.opened.harness.snapshot(Runs, f.opened.root.id, context)).toEqual({
-    [child.conversationId]: { model: 'faux-1', adhoc: true },
+    [child.conversationId]: { model: 'faux-2', adhoc: true },
   })
   expect(await f.opened.harness.snapshot(Metadata, child.conversationId, context)).toMatchObject({
     label: 'dead-code scan',
   })
+  await call(f.opened, {
+    action: 'start',
+    label: 'inherited scan',
+    tools: ['read', 'bash'],
+    task: 'Scan',
+  })
+  const inherited = (await children(f.opened)).at(-1)!
+  const inheritedAgent = await (await f.opened.harness.conversation(
+    inherited.conversationId,
+    context,
+  ))!.agent(context)
+  expect(inheritedAgent.model).toEqual((await f.opened.root.agent(context)).model)
 })
 
 it('routes asynchronous leaf reports only to their lead, not the root', async () => {

@@ -34,14 +34,14 @@ Children get `subagent` only when their definition lists it in `tools`; each par
 
 ### Agents made on the fly
 
-`start {label, task, family? | model?, thinking?, tools?, instructions?, isolate?}` without `agent` makes a child from
+`start {label, task, model?, thinking?, tools?, instructions?, isolate?}` without `agent` makes a child from
 the call; nothing is written to disk. It gets a short neutral base (one task, no delegating or pushing, report
-evidence) plus `instructions`; the parent's tools or the `tools` subset, never `subagent`; `family`, else the parent's
+evidence) plus `instructions`; the parent's tools or the `tools` subset, never `subagent`; `model`, else the parent's
 model; no automatic summaries; and a worktree when it may `edit` or `write`. Read-only means leaving those two out;
-bash stays read-only only by instruction, as for `scout`. A family or model the call names must have a login here and
-never falls back; the error lists the usable families.
+bash stays read-only only by instruction, as for `scout`. A model the call names must have a login here and never
+falls back.
 
-`label`, `family`, `model` and `thinking` also apply over a named `agent`, for example a worker on the review family;
+`label`, `model` and `thinking` also apply over a named `agent`; without `model`, it uses its configured family or pin;
 `tools` and `instructions` need `agent` left out. The root's `subagents.runs` document (`RunsDoc`, `{ [childId]:
 { model?, adhoc? } }`) records each start's model and whether it was made on the fly; the sidebar and call card show
 `label · model` with a wand for those.

@@ -690,16 +690,15 @@ export default function subagents(
   }
   host.implement(SubagentsApi, service)
   /**
-   * The definition a `start` runs: the named one with the call's family, model and thinking over its own, or, without
+   * The definition a `start` runs: the named one with the call's model and thinking over its own, or, without
    * `agent`, one made on the fly from the call (`label`, neutral instructions plus the caller's, the parent's tools or a
-   * subset, a worktree when it can edit or write). A family or model the call names must have a login here: unlike a
+   * subset, a worktree when it can edit or write). A model the call names must have a login here: unlike a
    * definition's pin, it is the point of the spawn, so it never falls back to the parent's model.
    */
   const spawnDefinition = async (
     args: {
       agent?: string
       label?: string
-      family?: string
       model?: string
       thinking?: ModelThinkingLevel
       tools?: string[]
@@ -711,15 +710,11 @@ export default function subagents(
       args.agent === undefined ? undefined : definitions.find((d) => d.name === args.agent)
     if (!named && (args.agent !== undefined || !args.label?.trim()))
       throw new Error(
-        `Unknown agent: ${args.agent}. Pass agent: one of ${definitions.map((agent) => agent.name).join(', ')}; or, for an agent made on the fly, label with family or model, tools and instructions`,
+        `Unknown agent: ${args.agent}. Pass agent: one of ${definitions.map((agent) => agent.name).join(', ')}; or, for an agent made on the fly, label with model, tools and instructions`,
       )
     if (named && (args.tools || args.instructions))
       throw new Error('tools and instructions make an agent on the fly: leave out agent')
     const families = await readFamilies(host.userHome, host.projectRoot)
-    if (args.family !== undefined && !Object.hasOwn(families.families, args.family))
-      throw new Error(
-        `Unknown family: ${args.family}. Families: ${Object.keys(families.families).join(', ')}`,
-      )
     const pinned = args.model === undefined ? undefined : refOf(args.model)
     if (args.model !== undefined && !pinned?.modelId)
       throw new Error(`model must be provider/modelId, not ${args.model}`)
@@ -735,29 +730,15 @@ export default function subagents(
         : 'none',
       summaries: false,
     }
-    const chosen = args.family !== undefined || pinned !== undefined || !named
     const definition = {
       ...base,
-      ...(pinned ? { model: pinned } : args.family !== undefined ? { family: args.family } : {}),
+      ...(pinned ? { model: pinned } : {}),
       ...(args.thinking ? { thinking: args.thinking } : {}),
     }
-    if (args.family !== undefined && !pinned) delete definition.model
     const runs = definitionRuns(definition, families)
     // A preview runs every agent on its one model, whatever the call names.
-    if (chosen && runs.model && !previewModel()) {
-      const available = host.modelRuntime.getAvailableSnapshot()
-      if (!hasLogin(available, runs.model)) {
-        const usable = Object.entries(families.families).flatMap(([name, spec]) => {
-          const ref = refOf(spec.model)
-          return !ref || hasLogin(available, ref)
-            ? [`${name} (${spec.model ?? 'parent model'})`]
-            : []
-        })
-        throw new Error(
-          `No login for ${refName(runs.model)}${runs.via === 'family' ? ` (family ${runs.family})` : ''}. Usable families: ${usable.join(', ')}`,
-        )
-      }
-    }
+    if (pinned && !previewModel() && !hasLogin(host.modelRuntime.getAvailableSnapshot(), pinned))
+      throw new Error(`No login for ${refName(pinned)}`)
     return { ...definition, runs }
   }
   const Reporter = createReporter()
@@ -998,7 +979,7 @@ export default function subagents(
           agent: opt(
             str({
               description:
-                'For start: an Available definitions name. Leave it out to make an agent on the fly from label, family or model, thinking, tools and instructions.',
+                'For start: an Available definitions name. Leave it out to make an agent on the fly from label, model, thinking, tools and instructions.',
             }),
           ),
           label: opt(
@@ -1007,10 +988,7 @@ export default function subagents(
                 'For start: what the child does, a few words ("dead-code scan"); the sidebar shows it. Required without agent.',
             }),
           ),
-          family: opt(
-            str({ description: 'For start: the model family to run on (fast, review…).' }),
-          ),
-          model: opt(str({ description: 'For start: provider/modelId, instead of a family.' })),
+          model: opt(str({ description: 'For start: override the model with provider/modelId.' })),
           thinking: opt(strEnum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])),
           tools: opt(
             arr(str(), {

@@ -206,6 +206,7 @@ async function recipient(host: ExtensionHost, spec: string, cwd: string): Promis
       return Number(items.find(([, item]) => item.branch === branch)?.[0]) || undefined
     }
     const range = /^[^.]+\.\.\.([^.]+)$/.exec(spec)
+    let head = spec
     if (range) {
       const sha = await git(
         cwd,
@@ -215,7 +216,10 @@ async function recipient(host: ExtensionHost, spec: string, cwd: string): Promis
         '--end-of-options',
         `${range[1]}^{commit}`,
       )
-      return recorded(sha, true)
+      const landed = await recorded(sha, true)
+      if (landed !== undefined) return landed
+      // Not landed (a pull request, say): look up the head commit's historical trailer or private owner record.
+      head = range[1]
     }
     if (spec === 'uncommitted' || spec.startsWith('-')) return undefined
     const trailer = await git(
@@ -224,7 +228,7 @@ async function recipient(host: ExtensionHost, spec: string, cwd: string): Promis
       '-1',
       '--format=%(trailers:key=Ultimate-Conversation,valueonly)',
       '--end-of-options',
-      spec,
+      head,
     )
     const historical = Number(trailer.split('\n')[0])
     if (historical) return historical
@@ -234,7 +238,7 @@ async function recipient(host: ExtensionHost, spec: string, cwd: string): Promis
       '--verify',
       '--quiet',
       '--end-of-options',
-      `${spec}^{commit}`,
+      `${head}^{commit}`,
     )
     return recorded(sha, false)
   }

@@ -4,6 +4,9 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai/provid
 import type { FauxResponseFactory } from '@earendil-works/pi-ai/providers/faux'
 import type { ConversationId } from '@earendil-works/pi-durable'
 import { expect, it } from 'vitest'
+import { git } from '../../../lib/git.ts'
+import { Committed } from '../../coding-tools/refs.ts'
+import { emit } from '../../../server/events.ts'
 import { limits } from '../comments.ts'
 import type { ReviewComment } from '../comments.ts'
 import { context } from '../../../server/harness.ts'
@@ -142,6 +145,61 @@ it('sends one review input to a conversation, refuses bad reviews, and is user-o
       (entry) => entry.kind === 'pi.tool-result',
     )
     expect(JSON.stringify(result?.model)).toContain('review/send is a user-only action')
+  } finally {
+    await server.close()
+    await removeTemp(home)
+  }
+})
+
+it('routes unlanded ranges by their head commit, with historical trailers or private owner records', async () => {
+  const home = await temp('ultimate-review-range-recipient-')
+  const project = join(home, 'project')
+  await mkdir(join(project, '.ultimate'), { recursive: true })
+  await writeFile(join(project, '.ultimate/settings.json'), '{}')
+  await git(project, 'init', '-q', '-b', 'main')
+  await git(project, 'config', 'user.email', 'test@example.com')
+  await git(project, 'config', 'user.name', 'Test')
+  await git(project, 'commit', '-q', '--allow-empty', '-m', 'first')
+  const server = await fauxServer({
+    ultimateRoot: resolve('.'),
+    projectRoot: project,
+    userHome: home,
+    home: join(home, 'state'),
+    localSetup: false,
+  })
+  try {
+    const branch = (await post(server, '/api/conversations', { title: 'Branch' })).data.id as number
+    const message = `add feature\n\nUltimate-Conversation: ${branch}`
+    await git(project, 'commit', '-q', '--allow-empty', '-m', message)
+    const recipient = await post(server, '/api/extensions/review/actions/recipient', {
+      args: { spec: 'main~1...main' },
+    })
+    expect(recipient.data.result).toEqual({ conversation: branch })
+
+    // New commits keep ownership private, without a public conversation trailer.
+    const owner = (await post(server, '/api/conversations', { title: 'Private owner' })).data.id
+    await git(project, 'commit', '-q', '--allow-empty', '-m', 'private feature')
+    const sha = await git(project, 'rev-parse', 'HEAD')
+    const repo = await git(project, 'rev-parse', '--show-toplevel')
+    await server.harness.commit(
+      (tx) =>
+        emit(tx, Committed, {
+          conversation: owner,
+          sha,
+          parents: [],
+          repo,
+          branch: 'main',
+          subject: 'private feature',
+        }),
+      context,
+    )
+    expect(
+      (
+        await post(server, '/api/extensions/review/actions/recipient', {
+          args: { spec: 'main~1...main' },
+        })
+      ).data.result,
+    ).toEqual({ conversation: owner })
   } finally {
     await server.close()
     await removeTemp(home)

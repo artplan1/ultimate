@@ -53,7 +53,7 @@ Actions (`refs.ts`):
 - `recipient { spec, conversation? }` → `{ conversation }`: a `branch:` spec's worktree owner, a landing range's
   submitter (by its tip in `workspaces.landed`), a commit's historical `Ultimate-Conversation` trailer or private
   `coding-tools.committed`/`workspaces.landed` record (read in `conversation`'s checkout, else the project's), else the
-  primary agent. Private owner lookup pages the event log rather than limiting ownership to recent events, following
-  recorded `rewrittenFrom` links to the original owner when available.
+  primary agent. An unlanded range uses its head commit's owner. Private owner lookup pages the event log rather than
+  limiting ownership to recent events, following recorded `rewrittenFrom` links to the original owner when available.
 - `send { conversation, spec, comments, note? }` (user only) → `{ conversation }`. At most 50 comments, each text up
   to 4,000 characters and excerpt up to 40 lines and 8 KB, to an existing conversation; it steers a busy one.

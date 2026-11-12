@@ -76,8 +76,8 @@ export const RangesAction = actionRef<{ conversation?: number } | null, ReviewRa
 )
 /**
  * `{ spec, conversation? }` → the conversation a review of `spec` goes to by default: a branch's owner, a landing's
- * submitter, the conversation a commit's historical trailer or private commit/landing record names, else the primary
- * agent's.
+ * submitter, the conversation a commit's historical trailer or private commit/landing record names (the head commit
+ * for an unlanded range), else the primary agent's.
  */
 export const RecipientAction = actionRef<
   { spec: string; conversation?: number },

@@ -1,5 +1,9 @@
 {
   "extensions": {
+    "enable": [
+      "tailscale",
+      "limits"
+    ],
     "disable": [
       "agent-browser",
       "keep-warm",

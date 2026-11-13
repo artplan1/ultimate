@@ -2,6 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { context } from '../server/harness.ts'
+import type { ExtensionHost } from '../server/extensions.ts'
+import self from '../extensions/self/server.ts'
 import { fauxServer, temp, removeTemp, until } from './helpers.ts'
 
 /** The folder and names the building_blocks section lists as available but off. */
@@ -11,8 +13,12 @@ function offFolders(section: string) {
       .split('\n')
       .filter((line) => line.startsWith('- '))
       .map((line): [string, string] => {
-        const [folder, names] = line.slice(2).split(': ')
-        return [folder, names]
+        const [folder, ...descriptions] = line.slice(2).split(': ')
+        const names = descriptions
+          .join(': ')
+          .split('; ')
+          .map((entry) => entry.split(': ')[0])
+        return [folder, names.join(', ')]
       }),
   )
 }
@@ -20,6 +26,33 @@ function offFolders(section: string) {
 function offNames(section: string) {
   return [...offFolders(section).values()].flatMap((names) => names.split(', '))
 }
+
+it('scopes development guidance to the Ultimate host, using its workspace docs', async () => {
+  const ultimateRoot = '/ultimate'
+  const own = { path: '/workspace', source: ultimateRoot }
+  async function render(projectRoot: string) {
+    const extension = self({
+      ultimateRoot,
+      projectRoot,
+      need: () => ({ get: async () => own }),
+    } as unknown as ExtensionHost)
+    return extension.sections![0].render(
+      { conversationId: 1 } as Parameters<NonNullable<typeof extension.sections>[0]['render']>[0],
+      context,
+    )
+  }
+  const clone = await render(ultimateRoot)
+  expect(clone).toContain('The host project is Ultimate itself.')
+  expect(clone).toContain('Before changing Ultimate, read /workspace/AGENTS.md')
+  expect(clone).toContain('Call restart only after a landing')
+  expect(clone).toContain('Land your workspace into /ultimate first')
+
+  const project = await render('/project')
+  expect(project).toContain('guide them from /ultimate/README.md')
+  expect(project).not.toContain('Before changing Ultimate')
+  expect(project).not.toContain('Call restart')
+  expect(project).not.toContain('Land your workspace')
+})
 
 it('renders only enabled guidance, lists off building blocks, and adds self guidance live', async () => {
   const home = await temp()
@@ -85,7 +118,9 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
     // Each extension lands on its own: wait until the section itself reports the reload.
     await until(async () => !offNames((await render()).building_blocks).includes('extra-lab'))
     const withSelf = await render()
-    expect(withSelf.self).toBeDefined()
+    expect(withSelf.self).toContain(`${server.host.ultimateRoot}/README.md`)
+    expect(withSelf.self).not.toContain('Before changing Ultimate')
+    expect(withSelf.self).not.toContain('Call restart')
     // Only the default-off built-ins are left to list.
     expect(offNames(withSelf.building_blocks)).not.toContain('self')
     expect(offNames(withSelf.building_blocks)).not.toContain('extra-lab')

@@ -1,7 +1,7 @@
 ---
 name: reviewer-simplicity
 description: Simplicity, slop and test-quality review of an immutable commit range.
-family: fast
+family: review
 tools: [read, grep, find, bash]
 resident: false
 ---

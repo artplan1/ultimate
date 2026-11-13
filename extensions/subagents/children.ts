@@ -76,10 +76,11 @@ export async function createChild(
     ...change,
     cwd: options.cwd ?? parent.cwd ?? null,
   })
-  // An explicit model is no family's; a fork would otherwise keep its parent's.
-  ;(await tx.doc(Family, child.id)).name = options.model
-    ? null
-    : definitionFamily(definition, change)
+  // An explicit model is no family's; a fork would otherwise keep its parent's. An agent made on the fly runs the
+  // caller's model, so it records none either: `default` named a family whose model it does not run, while the picker
+  // falls back to the default family only while the model and thinking level match it.
+  ;(await tx.doc(Family, child.id)).name =
+    options.model || options.adhoc ? null : definitionFamily(definition, change)
   Object.assign(await tx.doc(options.metadata, child.id), {
     label: options.label,
     title: options.title,

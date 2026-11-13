@@ -1,7 +1,11 @@
+import type { Agent } from '@earendil-works/pi-durable'
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { definitionAgent } from '../lib/agents.ts'
 import { definitionRuns, mergeFamilies, parseFamilies } from '../lib/families.ts'
+import type { FamilySpec } from '../lib/families.ts'
 import { readFamilies, readFamilyLayers, writeFamilies } from '../lib/families-settings.ts'
 import { temp } from './helpers.ts'
 
@@ -33,6 +37,60 @@ it('runs a definition on its pin, else its family, else the default family', () 
     family: 'default',
     via: 'family',
   })
+})
+
+it('moves the same agent and its instructions when only its family model and thinking change', () => {
+  // Families are configuration and `definitionRuns`/`definitionAgent` are what a start or a branch configures from, so
+  // a family swap is provable without a provider call: no model is asked anything here.
+  const available = [
+    { provider: 'acme', id: 'quick' },
+    { provider: 'acme', id: 'brisk' },
+  ]
+  const runtime = {
+    getAvailableSnapshot: () => available,
+    // Routing is what is asserted; clamping a level to a model's support is Pi's.
+    getModel: () => undefined,
+  } as unknown as ModelRuntime
+  const worker = {
+    name: 'worker',
+    description: 'Implement one bounded task',
+    path: 'worker.md',
+    instructions: 'Implement the task, verify it and report evidence.',
+    family: 'fast',
+  }
+  const parent = {
+    tools: [],
+    deferred: [],
+    extensions: [],
+    model: { provider: 'acme', modelId: 'lead' },
+    thinkingLevel: 'medium',
+  } as unknown as Agent
+  const run = (fast: FamilySpec) => {
+    const runs = definitionRuns(worker, mergeFamilies(parseFamilies({ families: { fast } })))
+    return { runs, agent: definitionAgent({ ...worker, runs }, parent, runtime) }
+  }
+  const first = run({ model: 'acme/quick', thinking: 'low' })
+  expect(first.runs).toEqual({
+    family: 'fast',
+    model: { provider: 'acme', modelId: 'quick' },
+    thinking: 'low',
+    via: 'family',
+  })
+  expect(first.agent).toMatchObject({
+    model: { provider: 'acme', modelId: 'quick' },
+    thinkingLevel: 'low',
+    instructions: worker.instructions,
+  })
+  // Only the family's preset moved: the same definition runs on the new model and thinking level, instructions intact,
+  // and still by family rather than by a pin.
+  const second = run({ model: 'acme/brisk', thinking: 'high' })
+  expect(second.runs).toMatchObject({ family: 'fast', via: 'family' })
+  expect(second.agent).toMatchObject({
+    model: { provider: 'acme', modelId: 'brisk' },
+    thinkingLevel: 'high',
+    instructions: worker.instructions,
+  })
+  expect(second.agent.instructions).toBe(first.agent.instructions)
 })
 
 it('merges the project over the user over the built-ins, field by field', () => {

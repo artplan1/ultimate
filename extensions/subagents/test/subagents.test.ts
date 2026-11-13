@@ -34,6 +34,7 @@ import subagents, { actions } from '../server.ts'
 import watchdog from '../../watchdog/server.ts'
 import type { ExtensionHost } from '../../../server/extensions.ts'
 import { Runs, Started, Subagents } from '../api.ts'
+import { Family } from '../../models/api.ts'
 import type { ActionContext } from '../../../server/actions.ts'
 import codemode from '../../codemode/server.ts'
 import { Metadata } from '../../../server/metadata.ts'
@@ -478,6 +479,11 @@ it('makes an agent on the fly from the call, read-only without a worktree, and r
     context,
   ))!.agent(context)
   expect(inheritedAgent.model).toEqual((await f.opened.root.agent(context)).model)
+  // It runs the caller's model, so it records no family of its own: `default` named a family whose model it never ran,
+  // and the picker shows a family only while the model and thinking level match it.
+  expect(await f.opened.harness.snapshot(Family, inherited.conversationId, context)).toEqual({
+    name: null,
+  })
 })
 
 it('routes asynchronous leaf reports only to their lead, not the root', async () => {

@@ -1,12 +1,19 @@
-import { CheckIcon, ChevronRightIcon, InboxIcon, PlayIcon, PlusIcon } from 'lucide-react'
-import { useState } from 'react'
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  InboxIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+} from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { api, cn, errorMessage, events, formatAgo, useDocOf, useNow, useUltimate } from '@/sdk'
 import { Waiting } from '../inbox/ui.tsx'
 import { stateTone } from '../messages/ui.tsx'
 import { StandingAction } from '../subagents/ui.tsx'
-import { AddAction, DoneAction, ReopenAction, TodosDoc } from './refs.ts'
+import { AddAction, DoneAction, EditAction, ReopenAction, TodosDoc } from './refs.ts'
 import type { Todo } from './refs.ts'
 
 const owners: { id: Todo['owner']; label: string }[] = [
@@ -45,6 +52,8 @@ function List({ questions }: { questions: readonly unknown[] }) {
   }
   const toggle = (todo: Todo) =>
     void run(api.action(todo.done ? ReopenAction : DoneAction, { id: todo.id }))
+  const change = (todo: Todo, text: string) =>
+    void run(api.action(EditAction, { id: todo.id, text }))
   const { showSurface, switchConversation } = useUltimate()
   // Sent as the user, like typing it into @ultimate's composer; a busy @ultimate takes it after its current run.
   const start = (todo: Todo) =>
@@ -88,12 +97,26 @@ function List({ questions }: { questions: readonly unknown[] }) {
           <Section title="For you" owner="user" empty={!questions.length && !yours.length}>
             {questions.length > 0 && <InboxRow count={questions.length} />}
             {yours.map((todo) => (
-              <TodoRow key={todo.id} todo={todo} now={now} toggle={toggle} start={start} />
+              <TodoRow
+                edit={change}
+                key={todo.id}
+                now={now}
+                start={start}
+                todo={todo}
+                toggle={toggle}
+              />
             ))}
           </Section>
           <Section title="For @ultimate" owner="ultimate" empty={!ultimate.length}>
             {ultimate.map((todo) => (
-              <TodoRow key={todo.id} todo={todo} now={now} toggle={toggle} start={start} />
+              <TodoRow
+                edit={change}
+                key={todo.id}
+                now={now}
+                start={start}
+                todo={todo}
+                toggle={toggle}
+              />
             ))}
           </Section>
         </>
@@ -106,7 +129,7 @@ function List({ questions }: { questions: readonly unknown[] }) {
           </summary>
           <ul className="px-1">
             {done.map((todo) => (
-              <TodoRow key={todo.id} todo={todo} now={now} toggle={toggle} />
+              <TodoRow edit={change} key={todo.id} now={now} todo={todo} toggle={toggle} />
             ))}
           </ul>
         </details>
@@ -140,24 +163,59 @@ function Section({
 }
 
 /**
- * One to-do: a check, its text and its age; ticking a done one reopens it. An open one also offers, on hover or focus,
- * to send @ultimate to work on it.
+ * One to-do: a check, its text and its age; ticking a done one reopens it. Its text changes in place through the
+ * pencil, and an open one also offers, on hover or focus, to send @ultimate to work on it.
  */
 function TodoRow({
   todo,
   now,
   toggle,
   start,
+  edit,
 }: {
   todo: Todo
   now: number
   toggle: (todo: Todo) => void
   start?: (todo: Todo) => void
+  edit?: (todo: Todo, text: string) => void
 }) {
+  const [editing, setEditing] = useState(false)
+  /** Whether the field closed from Escape, so its text is dropped rather than saved. */
+  const cancelled = useRef(false)
   const at = todo.done ?? todo.at
   const age = formatAgo(at, now)
   const label =
     todo.owner === 'user' ? 'Ask @ultimate to help with this' : 'Have @ultimate work on this'
+  if (editing)
+    return (
+      <li className="flex items-center rounded py-1 pr-1 pl-2" data-todo={todo.id} data-todo-editor>
+        <input
+          aria-label={`Change to-do ${todo.id}`}
+          autoFocus
+          className="h-7 min-w-0 flex-1 rounded-sm border border-input bg-background px-1.5 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          defaultValue={todo.text}
+          maxLength={300}
+          onBlur={(event) => {
+            setEditing(false)
+            const text = event.currentTarget.value.trim()
+            // Unchanged or emptied: nothing to change, and an empty to-do has no meaning.
+            if (!cancelled.current && text && text !== todo.text) edit?.(todo, text)
+          }}
+          onFocus={(event) => event.currentTarget.select()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+              // Without it, the keypress lands on the row and starts @ultimate on the to-do.
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+            if (event.key === 'Escape') {
+              cancelled.current = true
+              event.currentTarget.blur()
+            }
+          }}
+        />
+      </li>
+    )
   return (
     <li className="group/todo flex items-start rounded hover:bg-muted/50" data-todo={todo.id}>
       <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 py-1.5 pl-2">
@@ -188,20 +246,35 @@ function TodoRow({
           {age}
         </time>
       </label>
-      {start && !todo.done ? (
-        <button
-          aria-label={`${label}: ${todo.text}`}
-          className="mt-1 mr-2 ml-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 group-hover/todo:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          data-todo-start
-          onClick={() => start(todo)}
-          title={label}
-          type="button"
-        >
-          <PlayIcon className="size-3" />
-        </button>
-      ) : (
-        <span className="w-2 shrink-0" />
-      )}
+      <span className="mt-1 mr-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover/todo:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+        {start && !todo.done && (
+          <button
+            aria-label={`${label}: ${todo.text}`}
+            className="flex size-5 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            data-todo-start
+            onClick={() => start(todo)}
+            title={label}
+            type="button"
+          >
+            <PlayIcon className="size-3" />
+          </button>
+        )}
+        {edit && (
+          <button
+            aria-label={`Change: ${todo.text}`}
+            className="flex size-5 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            data-todo-change
+            onClick={() => {
+              cancelled.current = false
+              setEditing(true)
+            }}
+            title="Change this to-do's text"
+            type="button"
+          >
+            <PencilIcon className="size-3" />
+          </button>
+        )}
+      </span>
     </li>
   )
 }

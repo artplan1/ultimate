@@ -21,6 +21,8 @@ export const AddAction = actionRef<{ text: string; owner: Todo['owner']; key?: s
   'todos',
   'add',
 )
+/** `{ id, text }` → the to-do, with its text changed in place. User-only. */
+export const EditAction = actionRef<{ id: number; text: string }, Todo>('todos', 'edit')
 /** `{ id }` → the to-do, ticked. User-only. */
 export const DoneAction = actionRef<{ id: number }, Todo>('todos', 'done')
 /** `{ id }` → the to-do, open again. User-only. */

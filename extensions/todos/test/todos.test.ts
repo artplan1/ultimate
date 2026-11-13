@@ -1,7 +1,7 @@
 import type { ConversationId, GenerationHooks, Tx } from '@earendil-works/pi-durable'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import { expect, it } from 'vitest'
-import todosExtension, { add, DONE_LIMIT, mark, noteFor, Todos } from '../server.ts'
+import todosExtension, { add, DONE_LIMIT, edit, mark, noteFor, Todos } from '../server.ts'
 import type { ExtensionHost } from '../../../server/extensions.ts'
 import type { TodosService } from '../api.ts'
 
@@ -57,6 +57,28 @@ it('adds through TodosApi once per key, even after the to-do left the list', asy
   ;(await tx.doc(Todos, 1 as ConversationId)).items = []
   expect(await service!.add({ text: 'Call back', owner: 'user', key: 'mail-42' })).toEqual(first)
   expect(await list(tx)).toEqual([])
+})
+
+it("changes a to-do's text in place, keeping its id, owner, tick and the other items", async () => {
+  const { tx } = fakeTx()
+  await add(tx, 'Ship it', 'ultimate')
+  await add(tx, 'Their turn', 'user')
+  const ticked = await mark(tx, 1, true)
+  expect(await edit(tx, 1, '  Ship it today  ')).toEqual({
+    id: 1,
+    text: 'Ship it today',
+    owner: 'ultimate',
+    at: expect.any(Number),
+    done: ticked.done,
+  })
+  expect((await list(tx)).map((todo) => [todo.id, todo.text, todo.owner])).toEqual([
+    [1, 'Ship it today', 'ultimate'],
+    [2, 'Their turn', 'user'],
+  ])
+  await expect(edit(tx, 1, ' ')).rejects.toThrow('nonempty')
+  await expect(edit(tx, 1, 'x'.repeat(301))).rejects.toThrow('at most 300 characters')
+  await expect(edit(tx, 999, 'Nowhere')).rejects.toThrow('No to-do 999')
+  expect((await list(tx))[0].text).toBe('Ship it today')
 })
 
 it('ticks and reopens a to-do, keeping only the newest done ones', async () => {

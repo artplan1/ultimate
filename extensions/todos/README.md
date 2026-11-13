@@ -29,7 +29,9 @@ project's @ultimate to add one with `ultimate.tell`.
 
 The first tab of the right panel: one amber `Inbox · N` row while questions wait on the user (read live from
 Messages, never copied; a click opens the Inbox, which lists and answers them), the user's own to-dos, then
-@ultimate's, an add field, and the done ones folded away. The header counts questions apart from to-dos. An open to-do's ▶ button (on hover or focus) sends @ultimate, as the
+@ultimate's, an add field, and the done ones folded away. The header counts questions apart from to-dos. A row's pencil
+(on hover or focus, always on touch) changes its text in place: Enter or leaving the field saves, Escape drops it. An
+open to-do's ▶ button (on hover or focus) sends @ultimate, as the
 user, `Work on to-do #<id>: <text>` (`Help me with to-do #<id>: …` for the user's own), after its current run if
 it is busy, and opens its conversation. ⌘K “Show open questions” opens this tab.
 
@@ -48,5 +50,7 @@ forgotten, and using it again adds a new to-do. Without a key every add adds.
 All user-only, for the panel; the HTTP endpoint still calls them.
 
 - `add { text, owner, key? }` → the new to-do, or the one `key` already added (above).
+- `edit { id, text }` → the to-do, with its text changed in place: the same id, owner and tick, and the same 300
+  characters after trimming.
 - `done { id }` → the to-do, ticked.
 - `reopen { id }` → the to-do, open again.

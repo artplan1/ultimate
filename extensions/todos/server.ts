@@ -19,7 +19,7 @@ import { implementAction } from '../../lib/actions.ts'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { Standing } from '../subagents/api.ts'
 import { TodosApi } from './api.ts'
-import { AddAction, DoneAction, ReopenAction, TodosDoc } from './refs.ts'
+import { AddAction, DoneAction, EditAction, ReopenAction, TodosDoc } from './refs.ts'
 import type { Todo } from './refs.ts'
 
 /** Done to-dos kept; older ones are dropped when another is ticked. */
@@ -61,6 +61,19 @@ const Keys = defineDoc<{ keys: { key: string; todo: Todo }[] }>({
 export const docs = [Todos, Keys]
 
 const OWNERS = ['user', 'ultimate'] as const
+/** A to-do's text as the list keeps it: trimmed, nonempty, at most `TEXT_CHARS` characters. */
+function todoText(text: unknown): string {
+  if (typeof text !== 'string' || !text.trim()) throw new Error('text must be nonempty')
+  if (text.trim().length > TEXT_CHARS)
+    throw new Error(`text must be at most ${TEXT_CHARS} characters`)
+  return text.trim()
+}
+/** The to-do `id` names; refuses an id the list does not hold. */
+function found(todos: { items: Todo[] }, id: unknown): Todo {
+  const todo = todos.items.find((item) => item.id === id)
+  if (!todo) throw new Error(`No to-do ${String(id)}`)
+  return todo
+}
 
 /**
  * Add a to-do. A `key` seen before adds nothing and returns the to-do it added: as it is now, or as it was when
@@ -83,15 +96,13 @@ export async function add(tx: Tx, text: unknown, owner: unknown, key?: unknown):
     keys.keys.splice(0, keys.keys.length - KEY_LIMIT)
     return todo
   }
-  if (typeof text !== 'string' || !text.trim()) throw new Error('text must be nonempty')
-  if (text.trim().length > TEXT_CHARS)
-    throw new Error(`text must be at most ${TEXT_CHARS} characters`)
+  const checked = todoText(text)
   if (!OWNERS.includes(owner as Todo['owner']))
     throw new Error("owner must be 'user' or 'ultimate'")
   const todos = await tx.doc(Todos, ROOT_CONVERSATION_ID)
   const todo: Todo = {
     id: todos.next++,
-    text: text.trim(),
+    text: checked,
     owner: owner as Todo['owner'],
     at: Date.now(),
   }
@@ -100,11 +111,18 @@ export async function add(tx: Tx, text: unknown, owner: unknown, key?: unknown):
   return { ...todo }
 }
 
+/** Change to-do `id`'s text in place: its id, owner and tick stay as they are. */
+export async function edit(tx: Tx, id: unknown, text: unknown): Promise<Todo> {
+  const checked = todoText(text)
+  const todo = found(await tx.doc(Todos, ROOT_CONVERSATION_ID), id)
+  todo.text = checked
+  // A copy: the document's overlay is unusable once the commit settles, and callers reply with this.
+  return { ...todo }
+}
 /** Tick to-do `id` (or open it again), keeping only the newest `DONE_LIMIT` done ones. */
 export async function mark(tx: Tx, id: unknown, done: boolean) {
   const todos = await tx.doc(Todos, ROOT_CONVERSATION_ID)
-  const todo = todos.items.find((item) => item.id === id)
-  if (!todo) throw new Error(`No to-do ${String(id)}`)
+  const todo = found(todos, id)
   if (done) {
     todo.done ??= Date.now()
     const ticked = todos.items.filter((item) => item.done !== undefined)
@@ -164,7 +182,7 @@ export async function noteFor(tx: Tx, conversationId: ConversationId, now: numbe
 const field = (args: unknown, name: string) =>
   args && typeof args === 'object' ? (args as Record<string, unknown>)[name] : undefined
 
-export const userActions = ['add', 'done', 'reopen']
+export const userActions = ['add', 'edit', 'done', 'reopen']
 export const actions = {
   add: implementAction(AddAction, (args, { host }) =>
     host
@@ -173,6 +191,9 @@ export const actions = {
         (tx) => add(tx, field(args, 'text'), field(args, 'owner'), field(args, 'key')),
         context,
       ),
+  ),
+  edit: implementAction(EditAction, (args, { host }) =>
+    host.harness().commit((tx) => edit(tx, field(args, 'id'), field(args, 'text')), context),
   ),
   done: implementAction(DoneAction, (args, { host }) =>
     host.harness().commit((tx) => mark(tx, field(args, 'id'), true), context),

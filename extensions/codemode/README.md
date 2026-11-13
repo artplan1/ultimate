@@ -56,7 +56,7 @@ The call is the target's `codemode.read {op, args}` action, sent with the target
 `ultimate.tell({ project, text, reply?, machine? })` — @ultimate only: message that project's @ultimate, found the same way (`machine` picks one machine's instance when the project runs on several). It returns `{ message, delivered }` (this log's id and the target's); a target that is not running or not reachable fails with a sentence naming the project and machine. With `reply` (default true) the answer returns as a reply. See [Messages](../messages/README.md#other-projects-ultimates).
 
 - `ultimate.models()` — model metadata, without credentials or provider headers.
-- `ultimate.agents()` — agent definitions, the profiles subagents and automations run with: each one's source (builtin, user, project), path, fields, and instructions, plus files that failed to parse. To change one, edit its file; for a built-in, write an override with the same name to `<project>/.ultimate/agents/` or `~/.ultimate/agents/`.
+- `ultimate.agents()` — agent definitions, the profiles subagents and automations run with: each one's source (builtin, user, project), path, `overlays` (the files merged into it), fields, and instructions, plus files that failed to parse. Read a definition here instead of guessing `<project>/.ultimate/agents/<name>.md`. To change one, edit its file; for a built-in, write an override with the same name to `<project>/.ultimate/agents/` or `~/.ultimate/agents/`.
 - `ultimate.doc(kind, conversationId?, options?)` — exported conversation document or `pi.agent`/`pi.inbox`/`pi.live`/`pi.usage`; defaults to the calling conversation.
 
 Facets can export `userActions: string[]` to reserve actions for the UI. `ultimate.action` rejects these with
@@ -72,27 +72,25 @@ For a conversation whose visible text is appropriate to disclose:
 
 ```js
 const entries = await ultimate.entries(1, { kinds: ['pi.user', 'pi.assistant'], limit: 5 })
-const rows = []
-for (const entry of entries) {
-  for (const message of entry.model) {
-    if (message.role !== 'user' && message.role !== 'assistant') continue
-    const blocks =
-      typeof message.content === 'string'
-        ? [{ type: 'text', text: message.content }]
-        : message.content
-    for (const block of blocks) {
-      if (block.type === 'text') rows.push({ id: entry.id, text: block.text.slice(0, 240) })
-      if (block.type === 'toolCall') rows.push({ id: entry.id, tool: block.name })
-    }
-  }
-}
-text(rows.slice(0, 10))
+const rows = entries.map((entry) => ({
+  id: entry.id,
+  role: entry.role,
+  ...(entry.text ? { text: entry.text.slice(0, 240) } : {}),
+  ...(entry.tools ? { tools: entry.tools.map((tool) => tool.name) } : {}),
+}))
+text(rows)
 ```
 
 This omits tool-result entries and roles, images, thinking, encrypted payload fields and tool arguments/results.
 Keep only whitelisted tool metadata (names here), never full arguments, Bash commands or prompts.
 Clipping bounds output, not disclosure: even a text block can contain serialized payloads or credentials.
 If the selected messages are not known to be safe, omit `text` from the projection and output only ids and tool names.
+
+`tools`, `ultimate`, `text`, `image`, `store`, `load` and `console` are injected into the script: a `const tools = …`
+fails the whole script with `SyntaxError: invalid redefinition of parameter name`, so name locals differently. A quoted
+string ends at the end of its line (`unexpected end of string`), so build multi-line text with a template literal or
+`\n`. `text()` prints a string as it is and anything else as JSON; return data instead of printing it where that is
+shorter.
 
 ## Durable store
 

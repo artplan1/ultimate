@@ -18,15 +18,16 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * After a billing (402) or auth (401/403) failure, no request goes out for this long: neither fixes itself between
- * tool rounds, and callers like phase ask on every round. 15 minutes caps a stuck account at four calls an hour and
- * still recovers soon after a top-up without a restart; a changed key retries at once.
+ * After a billing (402), auth (401/403) or region (451) failure, no request goes out for this long: none fixes itself
+ * between tool rounds, and callers like phase ask on every round. 15 minutes caps a stuck account at four calls an hour
+ * and still recovers soon after a top-up or a region change without a restart; a changed key retries at once.
  */
 export const cooldownMs = 15 * 60_000
 const rejected: Record<number, string> = {
   401: 'TypeSafe: API key rejected',
   402: 'TypeSafe: out of credits',
   403: 'TypeSafe: API key not allowed',
+  451: 'TypeSafe: not available in this region',
 }
 
 export default function classify(host: ExtensionHost) {

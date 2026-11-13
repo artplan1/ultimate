@@ -30,7 +30,7 @@
   "isolates": {
     "worktree": {
       "setup": [
-        "if [ \"$ULTIMATE_SOURCE\" = \"/Users/artem/projects/ultimate-fff\" ]; then test -d \"$ULTIMATE_SOURCE/node_modules\" && { test -e node_modules || ln -s \"$ULTIMATE_SOURCE/node_modules\" node_modules; }; else pnpm install --frozen-lockfile --prefer-offline; fi"
+        "if [ -d \"$ULTIMATE_SOURCE/node_modules\" ]; then test -e node_modules || ln -s \"$ULTIMATE_SOURCE/node_modules\" node_modules; elif [ -f package.json ]; then pnpm install --frozen-lockfile --prefer-offline; fi"
       ]
     }
   },

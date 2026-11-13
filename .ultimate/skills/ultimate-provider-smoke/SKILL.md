@@ -57,11 +57,20 @@ Read the home (`<home>` from `instance start`, or `$H`) read-only, before stoppi
 temporary home.
 
 ```bash
+# Here `sqlite3 -readonly` failed with "unable to open database file" on databases that existed; the read-only
+# node:sqlite driver opened them, live instances and stopped homes alike. If it fails on a database too, copy the file
+# with its `-wal` and read the copy.
+read_db() { # read_db <database> <sql>
+  node -e 'const { DatabaseSync } = require("node:sqlite")
+const db = new DatabaseSync(process.argv[1], { readOnly: true })
+for (const row of db.prepare(process.argv[2]).all()) console.log(JSON.stringify(row))
+db.close()' "$1" "$2"
+}
 # every model call: conversation, provider/model, wall time in ms, usage and stop reason
-sqlite3 -readonly <home>/trace.sqlite \
-  "select conversation, name, round(ms), result from calls where kind='model' order by at"
+read_db <home>/trace.sqlite \
+  "select conversation, name, round(ms) as ms, result from calls where kind='model' order by at"
 # the conversation's model and its usage document (pi.agent, pi.usage)
-sqlite3 -readonly <home>/state.sqlite "select d.kind, r.content from documents d
+read_db <home>/state.sqlite "select d.kind, r.content from documents d
   join document_revisions r on r.document_id = d.id
   where d.owner_id = <id> and d.kind in ('\"pi.agent\"', '\"pi.usage\"') order by r.seq desc"
 ```

@@ -152,7 +152,7 @@ async function agentsArea(host: CheckHost): Promise<SetupIssue[]> {
       status: 'warn',
       summary: `${shortPath(host, file.path)} replaces the built-in ${file.name}`,
       impact:
-        'It no longer follows updates to the built-in instructions. Make it an overlay: name, addTools, the settings you change and your additions (docs/subagents.md).',
+        "It stops following updates to the built-in instructions. An overlay with the same name, addTools and the settings you change keeps that (docs/subagents.md). Changing this file, or any file outside the project, is the user's call: ask before editing.",
     })
   if (!issues.length && loggedIn(host))
     issues.push({ area: 'Agent models', status: 'ok', summary: 'every pinned model has a login' })

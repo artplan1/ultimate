@@ -988,7 +988,12 @@ export default function subagents(
                 'For start: what the child does, a few words ("dead-code scan"); the sidebar shows it. Required without agent.',
             }),
           ),
-          model: opt(str({ description: 'For start: override the model with provider/modelId.' })),
+          model: opt(
+            str({
+              description:
+                'For start: override the model with provider/modelId. Without it a named definition runs on its configured model or family, and an agent made on the fly runs on yours.',
+            }),
+          ),
           thinking: opt(strEnum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])),
           tools: opt(
             arr(str(), {

@@ -121,31 +121,38 @@ it('names the missing key and Secrets panel without sending a request', async ()
   expect(fetch).not.toHaveBeenCalled()
 })
 
-it('includes the HTTP status and truncated response body without retrying', async () => {
-  const { service } = await fixture()
+it('includes the HTTP status and truncated response body without retrying, and a 429 pauses nothing', async () => {
+  const { service, notice } = await fixture()
   const fetch = vi
     .fn<typeof globalThis.fetch>()
-    .mockResolvedValue(new Response('x'.repeat(2000), { status: 429 }))
+    .mockImplementation(async () => new Response('x'.repeat(2000), { status: 429 }))
   vi.stubGlobal('fetch', fetch)
-  await expect(service.ask(request, new AbortController().signal)).rejects.toThrow(
-    `TypeSafe 429: ${'x'.repeat(1000)}`,
-  )
-  expect(fetch).toHaveBeenCalledTimes(1)
+  const signal = new AbortController().signal
+  await expect(service.ask(request, signal)).rejects.toThrow(`TypeSafe 429: ${'x'.repeat(1000)}`)
+  await expect(service.ask(request, signal)).rejects.toThrow('TypeSafe 429')
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(notice).not.toHaveBeenCalled()
 })
 
-it('stops sending after a 402 until the cooldown ends', async () => {
+it.each([
+  [402, 'TypeSafe: out of credits'],
+  [401, 'TypeSafe: API key rejected'],
+  [403, 'TypeSafe: API key not allowed'],
+  [451, 'TypeSafe: not available in this region'],
+])('stops sending after a %i until the cooldown ends', async (status, reason) => {
   vi.useFakeTimers({ toFake: ['Date'] })
   const { service, notice } = await fixture()
   const fetch = vi
     .fn<typeof globalThis.fetch>()
-    .mockResolvedValueOnce(new Response('billing_error', { status: 402 }))
+    .mockResolvedValueOnce(new Response('rejected', { status }))
     .mockImplementation(async () => Response.json(body))
   vi.stubGlobal('fetch', fetch)
   const signal = new AbortController().signal
-  await expect(service.ask(request, signal)).rejects.toThrow('TypeSafe 402: billing_error')
-  await expect(service.ask(request, signal)).rejects.toThrow('TypeSafe 402: billing_error')
+  await expect(service.ask(request, signal)).rejects.toThrow(`TypeSafe ${status}: rejected`)
+  await expect(service.ask(request, signal)).rejects.toThrow(`TypeSafe ${status}: rejected`)
   expect(fetch).toHaveBeenCalledTimes(1)
-  expect(notice).toHaveBeenCalledWith(expect.stringContaining('TypeSafe: out of credits'))
+  expect(notice).toHaveBeenCalledTimes(1)
+  expect(notice).toHaveBeenCalledWith(expect.stringContaining(reason))
   vi.advanceTimersByTime(cooldownMs)
   expect((await service.ask(request, signal)).model).toBe('jev-1.14.0')
   expect(fetch).toHaveBeenCalledTimes(2)

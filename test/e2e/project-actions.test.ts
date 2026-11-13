@@ -16,8 +16,11 @@ import { actionExec } from '../../server/actions.ts'
 const directories: string[] = []
 const servers: Awaited<ReturnType<typeof createServer>>[] = []
 afterEach(async () => {
-  for (const server of servers.splice(0)) await server.close()
-  for (const path of directories.splice(0)) await removeTemp(path)
+  // Both lists before the first await, so a hook past its timeout cannot delete the next test's folders.
+  const closing = servers.splice(0)
+  const taken = directories.splice(0)
+  for (const server of closing) await server.close()
+  for (const path of taken) await removeTemp(path)
 })
 async function temp() {
   const path = await tempDirectory('ultimate-project-')
@@ -213,7 +216,12 @@ it('loads external project facets over user and built-in names, actions and tran
     (await post(server.url, '/api/extensions/coding-tools/actions/hello')).data.result.value,
   ).toBe('edited')
   await rm(path, { recursive: true })
-  await until(() => record().source === 'user')
+  await until(
+    async () =>
+      record().source === 'user' &&
+      (await post(server.url, '/api/extensions/coding-tools/actions/hello')).data.result.value ===
+        'user',
+  )
   expect(
     (await post(server.url, '/api/extensions/coding-tools/actions/hello')).data.result.value,
   ).toBe('user')

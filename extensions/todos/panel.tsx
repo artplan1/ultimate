@@ -243,7 +243,7 @@ function TodoRow({
           title={`${todo.done ? 'Done' : 'Added'} ${new Date(at).toLocaleString()}`}
         >
           {todo.done && todo.owner === 'ultimate' ? '@ultimate · ' : ''}
-          {age}
+          {todo.id} · {age}
         </time>
       </label>
       <span className="mt-1 mr-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover/todo:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">

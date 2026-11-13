@@ -12,8 +12,11 @@ const servers: FixtureServer[] = []
 
 /** Close this file's servers and remove its temp homes; call it from the file's afterAll. */
 export async function closeFixtures() {
-  await Promise.all(servers.splice(0).map((server) => server.close()))
-  for (const home of homes.splice(0)) await removeTemp(home)
+  // Capture both lists before close can yield to another test's setup.
+  const closing = servers.splice(0)
+  const taken = homes.splice(0)
+  await Promise.all(closing.map((server) => server.close()))
+  for (const home of taken) await removeTemp(home)
 }
 /** A temp home, removed with the file's others. */
 export async function fixtureHome() {

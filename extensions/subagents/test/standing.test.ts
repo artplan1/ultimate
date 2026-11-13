@@ -22,14 +22,17 @@ import { Profile, Standing, Started } from '../api.ts'
 import type { SubagentsService } from '../api.ts'
 import { Metadata } from '../../../server/metadata.ts'
 import { Marks } from '../../conversations/api.ts'
-import { parseDefinition, saveDefinition } from '../../../lib/agents.ts'
+import { discoverAgents, parseDefinition, saveDefinition } from '../../../lib/agents.ts'
 
 const ctx = BACKGROUND_CONTEXT
 const directories: string[] = []
 const opened: OpenHost[] = []
 afterEach(async () => {
-  for (const host of opened.splice(0)) await host.close()
-  for (const path of directories.splice(0)) await removeTemp(path)
+  // Both lists before the first await, so a hook past its timeout cannot delete the next test's folders.
+  const closing = opened.splice(0)
+  const taken = directories.splice(0)
+  for (const host of closing) await host.close()
+  for (const path of taken) await removeTemp(path)
 })
 const definition = (body: string, extra = '') =>
   `---\nname: x\ndescription: Test\nresident: true\ntools: [read, t]\nisolate: worktree\n${extra}---\n${body}\n`
@@ -318,4 +321,45 @@ it('offers deferred tools only when named by the definition, and removes them on
   }, ctx)
   await service.standing('x', ctx)
   expect((await conversation.agent(ctx)).tools.map((tool) => tool.name)).toEqual(['read'])
+})
+
+// solidcraft #6254: a chat created from a definition kept its old tools after the definition gained `message`.
+it('reconfigures a child from its current definition, keeping its chosen model', async () => {
+  const { service, host, prepared, path, file } = await fixture()
+  const ordinary = (tools: string) =>
+    `---\nname: x\ndescription: Test\ntools: ${tools}\n---\nInstructions\n`
+  const read = async () =>
+    (await discoverAgents(path, path, path, prepared.modelRuntime)).definitions.find(
+      (item) => item.name === 'x',
+    )!
+  await writeFile(file, ordinary('[read]'))
+  const options = { parentAgent: await host.root.agent(ctx), modelRuntime: prepared.modelRuntime }
+  const original = await read()
+  const child = await host.harness.commit(
+    (tx) =>
+      service.createChild(tx, {
+        ...options,
+        owner: { kind: 'ownerless' },
+        definition: original,
+        metadata: Metadata,
+        label: 'x',
+        title: 'Chat',
+      }),
+    ctx,
+  )
+  const conversation = (await host.harness.conversation(child.id, ctx))!
+  expect((await conversation.agent(ctx)).tools.map((tool) => tool.name)).toEqual(['read'])
+  await host.harness.commit(
+    (tx) => configure(tx, child.id, { model: { provider: 'faux', modelId: 'faux-pinned' } }),
+    ctx,
+  )
+  await writeFile(file, ordinary('[read, t]'))
+  const edited = await read()
+  await host.harness.commit(
+    (tx) => service.reconfigure(tx, child.id, { ...options, definition: edited }),
+    ctx,
+  )
+  const agent = await conversation.agent(ctx)
+  expect(agent.tools.map((tool) => tool.name)).toEqual(['read', 't'])
+  expect(agent.model).toEqual({ provider: 'faux', modelId: 'faux-pinned' })
 })

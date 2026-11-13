@@ -92,6 +92,7 @@ export async function createWeb(options: {
     () => undefined, // No bundle yet: the first page builds one.
   )
   let inputs = new Set(manifest?.inputs)
+  let targets = await discoverExtensions(ultimateRoot, projectRoot, userHome)
   let brokenRoots = manifest?.broken ?? []
   /** Bundles replaced in this process, by when: a page still loading one may ask for its chunks for a while. */
   const retired = new Map(Object.entries(manifest?.retired ?? {}))
@@ -140,7 +141,7 @@ export async function createWeb(options: {
   async function buildOnce() {
     const at = Date.now()
     const facets = await webFacets(ultimateRoot, projectRoot, userHome)
-    const targets = await discoverExtensions(ultimateRoot, projectRoot, userHome)
+    targets = await discoverExtensions(ultimateRoot, projectRoot, userHome)
     const outDir = join(folder, 'next')
     const broken: Record<string, string> = {}
     const brokenFolders: string[] = []
@@ -274,7 +275,12 @@ export async function createWeb(options: {
   }
   const inside = (file: string, root: string) => file === root || file.startsWith(root + sep)
   const tests = (file: string) =>
-    roots.some((root) => inside(file, root) && inExtensionTests(relative(root, file)))
+    roots.some((root) => inside(file, root) && inExtensionTests(relative(root, file))) ||
+    targets.some(
+      (entry) =>
+        inside(file, entry.target) &&
+        inExtensionTests(join(entry.name, relative(entry.target, file))),
+    )
   const onChange = (file: string) => {
     if (file.includes(`${sep}node_modules${sep}`) || tests(file)) return
     if (inside(file, webRoot) || always.includes(file) || inputs.has(file)) return touched(file)
@@ -287,7 +293,12 @@ export async function createWeb(options: {
   }
   const onStructure = (file: string) => {
     if (file.includes(`${sep}node_modules${sep}`) || tests(file)) return
-    if (inside(file, webRoot) || roots.some((root) => inside(file, root))) touched(file)
+    if (
+      inside(file, webRoot) ||
+      roots.some((root) => inside(file, root)) ||
+      targets.some((entry) => inside(file, entry.target))
+    )
+      touched(file)
   }
   const structure = ['add', 'unlink', 'addDir', 'unlinkDir'] as const
   const unwatch = options.watch((watcher) => {

@@ -21,6 +21,8 @@ Never claim a UI change works without an image of it.
 - `browser {url, steps}` to drive a state: `click`, `fill` (`#composer-input` is the composer), `press`
   (`Meta+k` opens ⌘K on macOS, `Control+k` elsewhere; `mod` in `web/src/sdk/keys.ts`), `wait`, `eval`. The result
   lists console errors and failed requests: read them.
+- Before interacting, `{wait: 'body:not(:has(#resume)) #app'}` waits for the inert startup snapshot to leave, so selectors
+  match only the live app.
 - `eval` takes one expression and returns its value: `document.title`,
   `[...document.querySelectorAll('[data-entry-id]')].length`. Statements or `await` go in an async IIFE:
   `(async () => { const r = await fetch('/api/x'); return r.status })()`. A bare `const x = …; return x` fails.

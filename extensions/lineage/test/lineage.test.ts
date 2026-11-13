@@ -317,7 +317,7 @@ it.concurrent('branches from a tally: the root gets the prompt node, the branch 
   // A tally gets no prompt section, since it never requests; a branch learns where its context starts.
   expect(await section(server, ROOT_CONVERSATION_ID)).toBeUndefined()
   expect(await section(server, first)).toContain(
-    `Branched from #1 at entry ${reset.id} for: Add notes between conversations\nRoot: #1.\nYour context starts with the tally of your tree`,
+    `Branched from #1 at entry ${reset.id} for: Add notes between conversations\nFull original brief: \`lineage/info\`, with your conversation id, returns \`branch.intent\`.\nRoot: #1.\nYour context starts with the tally of your tree`,
   )
   expect(
     (await post(server, '/api/extensions/lineage/actions/info', { args: { id: first } })).data
@@ -327,6 +327,35 @@ it.concurrent('branches from a tally: the root gets the prompt node, the branch 
     root: 1,
     branch: { from: 1, intent: 'Add notes between conversations' },
   })
+})
+
+it.concurrent('keeps the full branch brief recoverable after compaction without repeating it in the system', async () => {
+  const { server, requests } = await fixture()
+  const prompt = `Investigate the renderer\n${'Detailed task requirements. '.repeat(120)}`.trim()
+  const id = await branchFrom(server, { from: 1, prompt })
+  const conversation = await settled(server, id)
+  expect(said(requests[0])).toContainEqual(['user', prompt])
+  const before = await section(server, id)
+  expect(before).toContain('for: Investigate the renderer')
+  expect(before!.split('\n')[0].length).toBeLessThan(140)
+  expect(before).toContain('`lineage/info`, with your conversation id, returns `branch.intent`')
+  expect(before).not.toContain(prompt)
+
+  // Force the original input out of the live context, not merely into older visible entries.
+  await server.harness.commit(async (tx) => {
+    for (let n = 0; n < 8; n++)
+      await tx.appendEntry(id, {
+        kind: 'pi.user',
+        model: [{ role: 'user', content: `Part ${n} ${'word '.repeat(4000)}`, timestamp: n }],
+      })
+  }, context)
+  await server.harness.waitForTask(await conversation.compact(undefined, context), context)
+  const view = await conversation.context(context)
+  expect(view.entries[0].kind).toBe('pi.compaction')
+  expect(said(view.messages)).not.toContainEqual(['user', prompt])
+  const response = await post(server, '/api/extensions/lineage/actions/info', { args: { id } })
+  expect(response.data.result.branch.intent).toBe(prompt)
+  expect(await section(server, id)).toBe(before)
 })
 
 const rootWork = {
@@ -476,7 +505,7 @@ it.concurrent('writes the prompt node of a branch of a branch into the tree root
     'Go deeper',
   ])
   expect(await section(server, nested)).toContain(
-    `Branched from #${first} at entry ${answer.id} for: Go deeper\nRoot: #1.`,
+    `Branched from #${first} at entry ${answer.id} for: Go deeper\nFull original brief: \`lineage/info\`, with your conversation id, returns \`branch.intent\`.\nRoot: #1.`,
   )
 })
 

@@ -1,5 +1,10 @@
 Ultimate's system prompt: coding guidelines, project context, skills, and the source reload layers.
 
+Shared sections keep the coding and durable-tool contract; agent definitions own task routing and acceptance.
+Project instructions and skill discovery apply to every capable reader. The disabled-extension catalogue is only
+for the standing @ultimate, which owns configuration; branches and children do not receive it. Operational flows
+such as onboarding and Dream are read from their owning docs on the matching input, not repeated in every role.
+
 The system prompt stays the same across builds, so a reload of an extension keeps the prompt cache. Instead, the input that starts a
 conversation's run gets a `prompt.build` note when the build differs from the one its last run started on: "Build
 changed: <old> → <new> · generation N · changed: …". The note is decided in the commit that places the input (the

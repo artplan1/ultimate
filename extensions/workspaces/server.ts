@@ -269,8 +269,8 @@ export default function workspaceExtension(host: ExtensionHost) {
           .harness()
           .commit((tx) => tx.conversation(input.conversationId), caller)
         if (row?.owner)
-          return `${head} You are a subagent: commit your verified work in this worktree and report the commit to your owner, who lands it. Only a top-level conversation can \`workspace submit\`.`
-        return `${head} Finish with \`workspace submit\` once your tip is committed and verified: the lander merges it into ${own.target} with whatever landed meanwhile, runs the project's checks, fast-forwards ${own.target} and pushes when configured; keep working meanwhile and do not merge ${own.target} yourself first. A failure comes back to you as a message: fix it and submit again. A landing reaches whoever started you as its card, and concludes you unless other work is still under way.`
+          return `${head} You are a subagent: follow the task's and project's delivery permissions. When a worker commit is authorized, commit verified work here and report it to your owner for landing; otherwise report the working-tree changes. Only a top-level conversation can \`workspace submit\`.`
+        return `${head} Follow project approval rules before Git handoff. When submission is authorized and your tip is committed and verified, \`workspace submit\` asks the lander to merge it into ${own.target} with whatever landed meanwhile, run the project's checks, fast-forward ${own.target} and push only when configured. Do not merge ${own.target} yourself first. A failure returns as a message; diagnose and repair it before an authorized retry. A landing reaches whoever started you as its card and concludes you unless other work is under way.`
       }),
     ],
   })

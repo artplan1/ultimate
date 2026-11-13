@@ -55,10 +55,25 @@ The input carries @ultimate's model and context window so the walkthrough can re
 **Walk me through Ultimate** (⌘K) reruns only the walkthrough: the user-only `walkthrough` action submits a
 `walkthrough.start` input to @ultimate, every time, and opens its conversation.
 
-Then @ultimate shows only applicable setup cards one at a time and waits for each choice, then reads the project
-with the user able to steer. It writes the root's first memories with `remember` (the user's instructions verbatim among them), suggests at most three useful
-project-specific agents, extensions or settings, and builds only what the user chooses. The first feature becomes a
-coordinator through `branch`. Roots stay read-only while @ultimate handles setup.
+Then @ultimate follows this setup sequence in its conversation (ordinary greetings and explanations are answers
+here; the walkthrough uses its own message cards):
+
+1. Show only applicable setup cards: extensions on a first run, project when undecided, Git when not isolatable.
+   Show one at a time and wait for each `onboarding.choice`; complete authorized Git setup before continuing.
+2. Read the project's README, layout, scripts, tests and recent history toward the user's instructions, with the user
+   able to steer.
+3. Write the first memories in one `remember {ops}` batch: project purpose, run/check/test commands, architecture,
+   conventions and current state; the user's instructions verbatim as their own memory (split across numbered
+   memories above the 2000-character body limit); and the user's name and working preferences. An invalid op
+   refuses the batch: fix and retry it.
+4. Use `integrate-ultimate` to suggest at most three project-specific agents, extensions or settings; configure only
+   what the user picks. Executable extensions go to coordinator branches. Check worktree setup (dependencies,
+   .env, database and dev port) and offer missing setup. Then offer one Show me · Skip card for a tour of Ultimate's
+   own repository setup; on Show me follow `adopt-ultimate-setup`.
+5. Start the user's first task through `branch`; ask only if none was named. Close with: “Want to hear about new
+   Ultimate features? Ask me to follow the changelog.”
+
+Follow project approvals throughout. Roots stay read-only while @ultimate handles setup.
 
 ## Setup cards
 

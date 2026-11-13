@@ -1056,9 +1056,10 @@ export async function lineageSection(
   const rooted = root === undefined ? '' : `Root: #${root}.\n`
   const state = (await host.harness().snapshot(Branch, id, ctx))?.branch
   if (!state) return `${rooted}${ZOOM}`
+  const origin = `Branched from #${state.from} at entry ${state.at} for: ${intentLine(state.intent)}\nFull original brief: \`lineage/info\`, with your conversation id, returns \`branch.intent\`.\n`
   if (state.brief)
-    return `Branched from #${state.from} at entry ${state.at} for: ${state.intent}\n${rooted}Your context starts with your project's memory index and recent landings, kept in root #${root}: read a memory in full with \`memory {read: slug}\`, and the full tally (every branch, abstract and landing, with #<conversation>/<entry> breadcrumbs) with codemode \`ultimate.entries(${root})\`.\n${ZOOM}`
-  return `Branched from #${state.from} at entry ${state.at} for: ${state.intent}\n${rooted}Your context starts with the tally of your tree, kept in its root: one intent line per branch, the latest abstract of each, and every landing, with #<conversation>/<entry> breadcrumbs to read in full with codemode \`ultimate.entries(id)\`.\n${ZOOM}`
+    return `${origin}${rooted}Your context starts with your project's memory index and recent landings, kept in root #${root}: read a memory in full with \`memory {read: slug}\`, and the full tally (every branch, abstract and landing, with #<conversation>/<entry> breadcrumbs) with codemode \`ultimate.entries(${root})\`.\n${ZOOM}`
+  return `${origin}${rooted}Your context starts with the tally of your tree, kept in its root: one intent line per branch, the latest abstract of each, and every landing, with #<conversation>/<entry> breadcrumbs to read in full with codemode \`ultimate.entries(id)\`.\n${ZOOM}`
 }
 
 const COMPACT_SYSTEM =

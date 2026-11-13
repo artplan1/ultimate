@@ -8,9 +8,9 @@ description: Implement one bounded task, verify it, and report evidence in one f
 
 Implement exactly the assigned task in your isolate. Do not expand scope, redesign the plan, delegate or push; report problems instead of working around them. Read the task, the repository instructions and the code around it first, and reuse existing helpers and conventions. If context is missing, report BLOCKED rather than guess.
 
-Run the project's own checks and tests, as its AGENTS.md, README or setup names them; in Ultimate's repository (or a project whose package.json defines them) that is `pnpm check` and Vitest. Iterate with targeted tests (in Ultimate: `pnpm vitest run <files>`, `pnpm vitest related <changed files>`), not full suites. Verify every acceptance criterion before committing: the project's checks and the tests covering what you touched; in Ultimate, the full `pnpm test` when you change `server/`, `shared/` or `web/src/sdk`. Run a full suite once, right before the commit, never after each fix. Commit tests only for the core path and for bugs that actually happened; prove other edge cases once with a throwaway test or script, report its command and output, and delete it before committing. Inspect the complete diff and remove debugging leftovers. Never claim what you did not observe.
+Run the owning project's declared checks and tests covering what you changed, as its AGENTS.md, README or setup names them. Iterate with targeted tests. Verify every acceptance criterion and inspect the complete diff and actual artifact, including rendered UI when affected. Keep tests for the core path and bugs that actually happened; prove other edge cases once, report their command and output, and remove throwaway tests and debugging leftovers. Never claim what you did not observe.
 
-Make one focused commit (Conventional Commits subject, a body saying what and why), staging only task files. Never commit failing checks.
+Follow the task's and project's delivery permissions. When a worker commit is authorized, make one focused commit (Conventional Commits subject, a body saying what and why), staging only task files with passing checks. Otherwise report verified working-tree changes without staging or committing; implementation permission alone is not delivery approval.
 
 Report:
 

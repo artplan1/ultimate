@@ -4,7 +4,8 @@ import { expect, it, vi } from 'vitest'
 import { context } from '../server/harness.ts'
 import type { ExtensionHost } from '../server/extensions.ts'
 import self from '../extensions/self/server.ts'
-import { fauxServer, temp, removeTemp, until } from './helpers.ts'
+import type { ConversationId } from '@earendil-works/pi-durable'
+import { fauxServer, post, temp, removeTemp, until } from './helpers.ts'
 
 /** The folder and names the building_blocks section lists as available but off. */
 function offFolders(section: string) {
@@ -85,15 +86,21 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
     home: join(home, 'state'),
   })
   try {
-    async function render(cwd = projectRoot, useEnv = true) {
-      const agent = await server.root.agent(context)
+    const standing = (
+      await post(server, '/api/extensions/subagents/actions/standing', {
+        args: { name: 'ultimate' },
+      })
+    ).data.result as ConversationId
+    async function render(cwd = projectRoot, useEnv = true, conversationId = standing) {
+      const conversation = (await server.harness.conversation(conversationId, context))!
+      const agent = await conversation.agent(context)
       const sections: Record<string, string> = {}
       for (const extension of server.host.registry.snapshot().installed()) {
         if (!['prompt', 'self'].includes(extension.name)) continue
         for (const section of extension.sections ?? []) {
           const value = await section.render(
             {
-              conversationId: server.root.id,
+              conversationId,
               agent: { ...agent, cwd },
               env: useEnv ? { cwd } : undefined,
             } as Parameters<typeof section.render>[0],
@@ -105,6 +112,7 @@ it('renders only enabled guidance, lists off building blocks, and adds self guid
       return sections
     }
     const withoutSelf = await render()
+    expect((await render(projectRoot, true, server.root.id)).building_blocks).toBeUndefined()
     expect(withoutSelf.self).toBeUndefined()
     expect(offNames(withoutSelf.building_blocks)).toContain('self')
     expect(offNames(withoutSelf.building_blocks)).toContain('extra-lab')

@@ -41,10 +41,12 @@ documents, tools and model-facing text.
   The note also lists up to 30 new target commits, overlaps first, with conversation trailers and an isolate's behind
   count. Nothing new means no note; mid-run inputs and tallies get none. `lineage.seen` `{ main?, at?, tally? }` keeps
   the baseline.
-- **Prompt.** Branches are told their origin, intent, tree root and inherited tally (or, with a brief, the memory index
-  and where the full tally is), and how to follow `#conversation/entry` breadcrumbs with `ultimate.entries(id)` and
-  `ultimate.search()`. Other top-level conversations get their own id and lookup guidance; roots and subagents get
-  nothing.
+- **Prompt.** Branches are told their origin, a short intent, tree root and inherited tally (or, with a brief, the
+  memory index and where the full tally is), and how to follow `#conversation/entry` breadcrumbs with
+  `ultimate.entries(id)` and `ultimate.search()`. The complete original brief is delivered as the first input and
+  remains in `lineage.branch.intent`, retrievable with `lineage/info {id}` even after compaction; it is not repeated
+  in the system section. Other top-level conversations get their own id and lookup guidance; roots and subagents
+  get nothing.
 - **Compaction.** `compact` on a listed tally root runs the harness's compaction: older tally content is summarized,
   recent entries stay verbatim, and `instructions` guide the summary. It keeps the idea, principles, standing decisions
   and each conversation's id, prompt, outcome, divergence, commits and breadcrumbs. To correct a decision, change the

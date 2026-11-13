@@ -183,6 +183,74 @@ it('fires every 2s into distinct answered conversations and supports pause, resu
   expect(await f.opened.harness.conversation(runs[0].conversationId!, context)).toBeDefined()
 })
 
+it("wakes a prompt automation's subscriber with the run conversation it started", async () => {
+  const f = await fixture()
+  const target = await f.opened.harness.commit(async (tx) => {
+    const child = await tx.createConversation({ ownership: { kind: 'ownerless' } })
+    await configure(tx, child.id, {})
+    return child
+  }, context)
+  const a = (await f.action('create', {
+    name: 'Digest',
+    prompt: 'Write the digest',
+    schedule: 'every 2s',
+    subscribers: [target.id],
+  })) as Automation
+  const wakes = async () => {
+    const conversation = (await f.opened.harness.conversation(target.id, context))!
+    return (await conversation.context(context)).entries.filter(
+      (e) => e.conversationId === target.id && e.kind === 'automations.fired',
+    )
+  }
+  await until(async () => {
+    const wake = (await wakes())[0]
+    return !!wake && !!wake.model?.[0]?.content
+  })
+  await f.action('pause', { id: a.id })
+  const run = (await f.records())[0].runs[0]
+  expect(run.conversationId).toBeTypeOf('number')
+  const content = (await wakes())[0].model?.[0]?.content
+  expect(content).toBe(
+    `Automation ${a.id} "Digest" fired: \nIts prompt run is in conversation #${run.conversationId}: read that rather than doing the work again.`,
+  )
+})
+
+it('names the run an overlapping fire skipped in the wake it delivers', async () => {
+  const f = await fixture()
+  const target = await f.opened.harness.commit(async (tx) => {
+    const child = await tx.createConversation({ ownership: { kind: 'ownerless' } })
+    await configure(tx, child.id, {})
+    return child
+  }, context)
+  const a = (await f.action('create', {
+    name: 'Hold',
+    prompt: 'HOLD',
+    agent: 'writer',
+    schedule: 'every 1s',
+    subscribers: [target.id],
+  })) as Automation
+  const wakes = async () => {
+    const conversation = (await f.opened.harness.conversation(target.id, context))!
+    return (await conversation.context(context)).entries.filter(
+      (e) => e.conversationId === target.id && e.kind === 'automations.fired',
+    )
+  }
+  await until(f.held)
+  await until(async () => (await f.records())[0].runs.some((r) => r.status === 'skipped'), 3000)
+  await until(async () => (await wakes()).length > 1, 3000)
+  await f.action('pause', { id: a.id })
+  const running = (await f.records())[0].runs.find((r) => r.status === 'running')!
+  const contents = (await wakes())
+    .map((wake) => wake.model?.[0]?.content)
+    .filter((content): content is string => typeof content === 'string')
+  expect(contents.length).toBeGreaterThan(1)
+  // The run's own wake and the skipped fire's both point at the run under way, never at an id of their own making.
+  for (const content of contents)
+    expect(content).toContain(`Its prompt run is in conversation #${running.conversationId}:`)
+  f.release()
+  await f.opened.harness.waitForTask(Number((await f.records())[0].runs[0].id) as TaskId, context)
+})
+
 it('fires a subscriber-only schedule without creating a run conversation', async () => {
   const f = await fixture()
   const target = await f.opened.harness.commit(async (tx) => {
@@ -204,6 +272,8 @@ it('fires a subscriber-only schedule without creating a run conversation', async
   await until(async () => (await fired()).length > 0)
   await f.action('pause', { id: a.id })
   expect((await fired())[0].data).toEqual({ id: a.id, name: 'Wake', text: '' })
+  // No prompt run exists, so the wake names none.
+  expect((await fired())[0].model?.[0]?.content).toBe(`Automation ${a.id} "Wake" fired: `)
   expect((await f.records())[0].runs).toEqual([])
   expect((await f.records())[0].fires).toBeGreaterThan(0)
   const conversations = await f.opened.harness.commit(

@@ -39,6 +39,7 @@ export function scheduler(
     event: number | string,
     kind: 'fired' | 'escalated',
     text: string,
+    run?: ConversationId,
   ) => Promise<void>,
 ) {
   const RunTask = defineTask<
@@ -51,8 +52,8 @@ export function scheduler(
     initial: () => ({ phase: 'create' }),
     phases: {
       create: async (task, runtime, context) => {
+        const a = task.input.automation
         try {
-          const a = task.input.automation
           if (!host.extensions().some((e) => e.name === 'subagents' && e.enabled))
             throw new Error('automations needs the subagents extension enabled')
           // The root's agent for its tools, on the default model and thinking level: the root's stored model may have
@@ -78,6 +79,10 @@ export function scheduler(
               (r) => r.id === String(task.id),
             )
             if (run) run.conversationId = child.id
+            // The fire's subscribers are woken here, where the run's conversation is known: a wake names it, so a
+            // subscriber that hears about the fire reads the run instead of doing the same work again.
+            if (a.subscribers.length)
+              await deliver(tx, a, String(task.id), 'fired', task.input.text ?? '', child.id)
             return { status: 'running', checkpoint: { phase: 'deliver', conversationId: child.id } }
           }, context)
         } catch (error) {
@@ -90,6 +95,9 @@ export function scheduler(
               'failed',
               String(error),
             )
+            // No run conversation to name: the fire still reaches the subscribers that asked to hear about it.
+            if (a.subscribers.length)
+              await deliver(tx, a, String(task.id), 'fired', task.input.text ?? '')
             return terminal
           }, context)
         }
@@ -172,13 +180,23 @@ export function scheduler(
       return { id: a.id }
     }
     // Scan for overlapping runs before any task/entry writes in this transaction.
-    const result = a.prompt ? await fireRun(tx, a, firedAt, text) : { id: a.id }
+    const run = a.prompt ? await fireRun(tx, a, firedAt, text) : undefined
     a.recentFires.push(firedAt)
     a.fires++
     a.lastFireAt = firedAt
     const event = await host.emit(tx, Fired, { id: a.id, text, fire: a.fires })
-    if (a.subscribers.length) await deliver(tx, a, event.id, 'fired', text)
-    return result
+    // A fire that starts a run wakes its subscribers from that run's task, which knows the conversation to name. The
+    // others wake here: with no prompt, or when an overlapping run took the fire, which wakes the run it left to.
+    if (a.subscribers.length && run?.status !== 'running')
+      await deliver(
+        tx,
+        a,
+        event.id,
+        'fired',
+        text,
+        a.runs.findLast((r) => r.status === 'running')?.conversationId,
+      )
+    return run ?? { id: a.id }
   }
   const activeRuns = new WeakMap<Tx, Set<string>>()
   // One event can fire several automations. Read their overlaps before the first fire writes any entries/tasks.

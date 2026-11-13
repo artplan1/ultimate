@@ -95,6 +95,8 @@ type Delivery = {
   kind: 'writing' | 'fired' | 'failed' | 'escalated'
   text: string
   targets: Subscriber[]
+  /** The conversation of the prompt run this fire started, when it started one: the wake names it. */
+  run?: ConversationId
 }
 /** What an action validated before its transaction: the agent to create, a project slug, a subscriber. */
 export type Prepared = {
@@ -356,14 +358,14 @@ export function supervisor(
     initial: () => ({ phase: 'deliver' }),
     phases: {
       deliver: async (task, runtime, ctx) => {
-        const { sub, event, kind, text, targets } = task.input
+        const { sub, event, kind, text, targets, run } = task.input
         if (kind === 'writing') await mkdir(join(folder(sub.id), 'state'), { recursive: true })
         const content =
           kind === 'writing'
             ? `${brief(sub)}\nWrite and briefly test run, then use automation resume {id:"${sub.id}"}. Ending your turn before resume or escalate escalates it.`
             : kind === 'failed'
               ? `Automation ${sub.id} "${sub.name}" failed (${sub.script!.failures ?? 1} of ${FAILURE_LIMIT} in a row; the ${FAILURE_LIMIT}rd escalates by itself): ${text}\nInvestigate, fix run, and use automation resume, or automation escalate with a clear reason when it cannot work. Ending your turn without resuming escalates it.\n${sub.scope === 'project' ? `${brief(sub)}\n` : ''}Last 50 log lines:\n${await tail(sub.id)}`
-              : `Automation ${sub.id} "${sub.name}" ${kind}: ${text}`
+              : `Automation ${sub.id} "${sub.name}" ${kind}: ${text}${run === undefined ? '' : `\nIts prompt run is in conversation #${run}: read that rather than doing the work again.`}`
         // Read only for an escalation, which already messages @ultimate.
         const ultimate =
           kind === 'escalated'
@@ -420,6 +422,7 @@ export function supervisor(
     event: number | string,
     kind: Delivery['kind'],
     text: string,
+    run?: ConversationId,
   ) {
     await tx.createTask(
       Deliver,
@@ -432,6 +435,7 @@ export function supervisor(
           kind === 'writing' || kind === 'failed'
             ? [sub.script!.conversationId]
             : [...sub.subscribers],
+        ...(run === undefined ? {} : { run }),
       },
       owner,
     )

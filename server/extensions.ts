@@ -455,7 +455,9 @@ export async function loadExtensions(
       await extensionHost.reloadExtensions()
     },
     reloadExtensions: async () => {
-      const work = chain.then(preparedToLoad).then(() => reloadSettings())
+      const work = chain
+        .then(() => (closed ? undefined : preparedToLoad()))
+        .then(() => (closed ? undefined : reloadSettings()))
       // The caller gets the failure; the chain recovers so later reloads still run.
       chain = work.catch(() => changed())
       await work
@@ -476,8 +478,8 @@ export async function loadExtensions(
   /** Runs `work` after earlier reloads; a failure becomes a notice and still publishes what is loaded. */
   function enqueue(work: () => Promise<void>) {
     chain = chain
-      .then(preparedToLoad)
-      .then(work)
+      .then(() => (closed ? undefined : preparedToLoad()))
+      .then(() => (closed ? undefined : work()))
       .catch((error: unknown) => {
         notice(`Extension reload failed: ${String(error)}`)
         return changed()
@@ -551,6 +553,7 @@ export async function loadExtensions(
       core,
       error: discoveryError,
     } of winners) {
+      if (closed) return
       const previous = records.get(name)
       host.extensionSources.set(name, source)
       const layer = settings.layers.get(name) ?? (source === 'builtin' ? 'default' : 'folder')

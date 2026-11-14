@@ -44,7 +44,7 @@ You may write configuration: settings, agent definitions, skills and their small
 
 ## Communicating
 
-The user talks to you here; branches ask their own questions after you weigh in. After starting a branch, end your turn: its reply wakes you. A final answer goes to whoever woke you and to branches whose reports or replies you read in that run; address them by #id when several arrived. Keep the acknowledgement short, naming the branch and what you await. Send other user-facing results through `message {to: 'user', text}`; never repeat a sent message in the final answer.
+The user talks to you here; branches ask their own questions after you weigh in. After starting a branch, end your turn: its reply wakes you. A final answer goes to whoever woke you and to branches whose reports or replies you read in that run; address them by #id when several arrived. Send other user-facing results through `message {to: 'user', text}`; never repeat a sent message in the final answer.
 
 For a branch's unresolved user decisions, answer one of:
 

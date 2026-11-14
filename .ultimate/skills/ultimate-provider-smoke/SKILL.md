@@ -16,8 +16,21 @@ streaming, pinned agent models, login or fallback, and prompt caching. Spend one
 only: never edit `~/.ultimate/settings.json` for it, since every other preview started meanwhile would read the change.
 
 To try a different model, set it the way a user would: an agent definition or a project setting in the checkout,
-or the composer's model picker in the preview. Logins are read from `~/.pi/agent` and Claude Code's own login, never
-copied; do not copy `auth.json`, credentials or secrets anywhere.
+or the composer's model picker in the preview. A preview is a second Ultimate that writes config of its own: at start
+it seeds `<home>/user/.ultimate` with copies of the user's settings, model families, trust, onboarding, secrets and
+Claude accounts, plus their agents and skills, so its clicks never reach the real `~/.ultimate`, and it links their
+extensions and Tailscale registry (`docs/running.md`). Provider logins are not among those copies: `HOME` links back to
+the real home, so `~/.pi/agent` and Claude Code's own login are read where they live. Do not inspect or copy the
+contents of `auth.json`, credentials or secrets. A scope that forbids even the native private copy uses the home
+below.
+
+### When the test may not start from a private copy
+
+`instance start {home: <absolute dir>, model: null}` uses that home instead of a temporary one, and seeding runs
+only while `<home>/user` is missing: create `<home>/user/.ultimate` first, and no config of the user's is copied
+there. The linked real home still carries the provider logins, so none is pasted, read or moved. Two costs: the
+user's extensions arrive with that seed, so they are absent too, and an explicit home is kept after `instance stop` —
+delete it yourself. The linked home is no sandbox: everything the real home holds stays reachable through it.
 
 ## Only when the test needs the process: a scratch server
 

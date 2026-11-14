@@ -10,9 +10,11 @@ Never claim a UI change works without an image of it.
 ## Where to look
 
 - UI changes in the host checkout's `web/` and built-in `extensions/`, and the running host project's
-  `.ultimate/extensions/`, hot-reload in the host: omit `url`.
+  `.ultimate/extensions/`, hot-reload in the host: a `screenshot` with no `url` reads the host's own UI.
 - Changes in another checkout, worktree or project do not reach the shared host: use that checkout's preview URL.
 - `server/` or `shared/` changes need a fresh preview before restarting the host.
+- Only a screenshot may leave `url` out. `browser` sends its steps to a page, and with no `url` that page is the host's
+  UI: the user's own conversation. Name the intended page's URL on every `browser` call, the host's or a preview's.
 
 ## How
 
@@ -28,11 +30,13 @@ Never claim a UI change works without an image of it.
   `(async () => { const r = await fetch('/api/x'); return r.status })()`. A bare `const x = …; return x` fails.
 - Scope selectors to the card or panel under test: `[data-entry-id="42"] button:has-text("Retry")`, not
   `button:has-text("Retry")`, which clicks the first match anywhere on the page.
-- Wait on Ultimate's state, never a guessed time: `{send: 'prompt'}` submits without the composer, then
-  `{until: 'idle'}` returns when that turn is done, `{until: 'quiet'}` when nothing runs (branches and subagents
-  included), `{until: {entry: 'pi.tool-result'}}` or `{until: {event: 'workspaces.landed', where: {…}}}` when that
-  appears. A timeout says what was still busy. `conversation: <id>` targets another conversation. Click and fill only
-  when the interaction itself is under test; never a fixed `wait <ms>`.
+- Wait on Ultimate's state, never a guessed time, and give the conversation on every `send` and `until`, so a step
+  names the conversation it acts on: `{send: 'prompt', conversation: <id>}` submits without the composer, then
+  `{until: 'idle', conversation: <id>}` returns when that turn is done, `{until: 'quiet', conversation: <id>}` when
+  nothing runs anywhere (branches and subagents included), and `{until: {entry: 'pi.tool-result'}}` or
+  `{until: {event: 'workspaces.landed', where: {…}}}` when that appears, each with its `conversation` as well. A step
+  without one takes the conversation the page shows, which on a page loaded without `url` is the user's own. A timeout
+  says what was still busy. Click and fill only when the interaction itself is under test; never a fixed `wait <ms>`.
 - Set up state (model, thinking, Play/Pause, abort) through the page's SDK in one `eval`, or curl the preview's HTTP
   API, not by clicking menus: `{eval: "window.ultimate.api.configure({model: {provider: 'openai-codex', modelId:
   'gpt-6.1-sol'}}, 2)"}`. Also `api.abort(id)`, `api.compact(undefined, id)`, `api.action({extension: 'pause', name:

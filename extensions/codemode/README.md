@@ -18,6 +18,9 @@ Successful nested subagent results may carry `details.answerId` (a durable answe
 
 ## Introspection and actions
 
+The tool description includes typed helper signatures with concise contract notes; the prompt section supplies
+call-selection and discovery guidance. These are descriptions of the same helpers, not a reduced API or a separate mode.
+
 Only inside codemode (not standalone model tools):
 
 - `ultimate.system()` — machine, process, persistence, resources, build identity, plus `machine.load` (the load average) and `processes` (the five processes using the most CPU of the whole machine), both sampled when it is called: the read to reach for instead of `uptime` or `ps`.

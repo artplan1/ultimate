@@ -1,6 +1,8 @@
 Ultimate's system prompt: coding guidelines, project context, skills, and the source reload layers.
 
-Shared sections keep the coding and durable-tool contract; agent definitions own task routing and acceptance.
+Shared sections keep coding policy and durable-operation guidance; agent definitions own task routing and acceptance.
+Tool schemas own parameter and matching contracts; shared tool guidance adds lookup/edit workflow, retry and polling
+rules without restating those schemas. Guidance follows the conversation's available tools.
 Project instructions and skill discovery apply to every capable reader. The disabled-extension catalogue is only
 for the standing @ultimate, which owns configuration; branches and children do not receive it. Operational flows
 such as onboarding and Dream are read from their owning docs on the matching input, not repeated in every role.

@@ -256,7 +256,7 @@ function globals(
     {
       name: 'system',
       description:
-        'Current machine, process, persistence, resources and build identity, plus machine.load (the load average) and processes (the five processes using the most CPU of the whole machine, sampled now). Use it instead of uptime or ps to tell whether the machine is starved.',
+        'Machine, process, persistence, resources and build; live machine.load average and top five CPU processes. Use instead of uptime/ps for resource pressure.',
       signature: '(): Promise<unknown>',
       execute: async () => {
         const { load, processes } = await machineLoad()
@@ -272,7 +272,7 @@ function globals(
     },
     {
       name: 'uiState',
-      description: 'Durable UI state of the root conversation: what the user is looking at.',
+      description: 'Root conversation durable UI state: what the user sees.',
       signature: '(): Promise<unknown>',
       execute: () => host.uiState(context),
     },
@@ -292,15 +292,14 @@ function globals(
     },
     {
       name: 'apis',
-      description:
-        'Extension contracts: each enabled extension with an api.ts or refs.ts and the one-line summary of what it offers.',
+      description: 'Enabled extensions with api.ts/refs.ts contracts and one-line summaries.',
       signature: '(): Promise<{ name: string; summary: string }[]>',
       execute: () => apiSummaries(host.extensions()),
     },
     {
       name: 'api',
       description:
-        "The contract of one extension: its api.ts (services, documents) and refs.ts (documents, actions with their arguments and results, events), each under a header line. Read it before calling the extension's actions.",
+        'One extension’s api.ts (services/documents) and refs.ts (documents/actions/events, including argument/result types), with file headers.',
       signature: '(name: string): Promise<string>',
       execute: ([name]) => {
         if (typeof name !== 'string' || !name) throw new Error('name must be nonempty')
@@ -310,7 +309,7 @@ function globals(
     {
       name: 'trace',
       description:
-        'Recorded calls (service, action, reactor, tool, model): the newest `limit` (default 100, at most 1000), oldest first; filter by trace id, conversation or ISO `since`.',
+        'Service/action/reactor/tool/model calls: newest limit (default 100, max 1000), oldest first; filter by trace, conversation or ISO since.',
       signature:
         '(query?: { trace?: string; conversation?: number; since?: string; limit?: number; project?: string; machine?: string }): Promise<{ id: string; parent?: string; trace: string; at: string; ms: number; caller: string; callee: string; kind: string; name: string; ok: boolean; error?: string; args?: string; result?: string; conversation?: number; task?: number; entry?: number }[]>',
       execute: read('trace', 0),
@@ -326,7 +325,7 @@ function globals(
     {
       name: 'action',
       description:
-        "Call an extension action, as the UI does, on behalf of this conversation; ultimate.extensions() lists each extension's actions, its README their args.",
+        'Invoke an extension action as this conversation, like the UI; extensions() lists actions, extension READMEs document args.',
       signature: '(extension: string, action: string, args?: unknown): Promise<unknown>',
       execute: (values) => {
         const [extension, action, args = null] = values as [string, string, unknown?]
@@ -342,7 +341,7 @@ function globals(
     {
       name: 'tell',
       description:
-        "Message another project's @ultimate (only @ultimate reaches it, as a message from you, never the user), as @ultimate only; with reply (default true) its answer returns to you as a reply. machine picks one instance when the project runs on several.",
+        '@ultimate only: message another project’s @ultimate as yourself, never the user. reply (default true) returns its answer to you; machine selects among multiple instances.',
       signature:
         '(input: { project: string; text: string; reply?: boolean; machine?: string }): Promise<{ message: number; delivered: number }>',
       execute: ([input], { signal }) => {
@@ -369,7 +368,7 @@ function globals(
     {
       name: 'conversations',
       description:
-        'All stored conversations: id, owner, and for listed ones title, label, cwd, busy, inputAt and concluded. chapter reads another chapter read-only (not with project); cross-chapter links are written <chapter>#123.',
+        'All stored conversations: id/owner; listed ones add title/label/cwd/busy/inputAt/concluded. chapter reads another chapter read-only, excludes project. Links: <chapter>#123.',
       signature:
         '(options?: { project?: string; machine?: string; chapter?: string }): Promise<unknown[]>',
       execute: read('conversations', 0),
@@ -377,7 +376,7 @@ function globals(
     {
       name: 'entries',
       description:
-        'Newest-first fork-aware stored history, including before resets and compactions. before is an exclusive entry ID. Entries are compact: message text whole, tool results kept at start and end, args and data cut, no thinking; full returns stored entries.',
+        'Newest-first fork-aware history, including before reset/compaction; before is exclusive. Compact: whole message text, tool-result ends, clipped args/data, no thinking; full returns stored records.',
       signature:
         '(conversationId: number, options?: { kinds?: string[]; limit?: number; before?: number; full?: boolean; project?: string; machine?: string; chapter?: string }): Promise<{ id: number; kind: string; at?: string; role?: string; tool?: string; text?: string; tools?: { name: string; args: string }[]; stopReason?: string; error?: string | true; data?: string }[]>',
       execute: read('entries', 1),
@@ -385,7 +384,7 @@ function globals(
     {
       name: 'search',
       description:
-        'Case-sensitive substring search over all stored entry JSON, including history before resets and compactions. kinds keeps only those entry kinds. Hits are compact, about 200 characters of the entry JSON around the match; full returns whole entries, or read one with entries(conversation, {before: id + 1, limit: 1}).',
+        'Case-sensitive substring over stored entry JSON, including before reset/compaction; kinds filters entry kinds. Compact hits: ~200 chars around match. full returns whole entries; alternatively entries(conversation, {before: id + 1, limit: 1}).',
       signature:
         '(text: string, options?: { conversationId?: number; kinds?: string[]; limit?: number; full?: boolean; project?: string; machine?: string; chapter?: string }): Promise<{ conversation: number; id: number; kind: string; at?: string; excerpt: string }[]>',
       execute: read('search', 1),
@@ -409,7 +408,7 @@ function globals(
     {
       name: 'agents',
       description:
-        "Agent definitions for subagents and automations, the files that failed to parse, user or project files replacing a built-in, and the project's `.ultimate/` setup decision: its definitions apply only once trusted. To change one, edit its file.",
+        'Subagent/automation definitions, parse errors, user/project replacements and .ultimate setup decision (project definitions require trust). Change definitions by editing their files.',
       signature:
         "(): Promise<{ definitions: { name: string; description: string; path: string; source: 'builtin' | 'user' | 'project'; instructions: string; model?: { provider: string; modelId: string }; thinking?: string; tools?: string[]; isolate?: 'none' | 'worktree'; resident?: boolean; fast?: boolean; summaries?: boolean; overlays?: string[] }[]; errors: { name: string; path: string; source: string; error: string }[]; replaced: { name: string; path: string; source: string }[]; projectSetup: 'trusted' | 'declined' | 'undecided' }>",
       execute: () =>
@@ -418,7 +417,7 @@ function globals(
     {
       name: 'doc',
       description:
-        'Read an exported extension document or pi.agent, pi.inbox, pi.live or pi.usage by kind; defaults to this conversation, or to conversation 1 in another project.',
+        'Read exported documents or pi.agent/pi.inbox/pi.live/pi.usage by kind. Default: this conversation, or 1 in another project.',
       signature:
         '(kind: string, conversationId?: number, options?: { project?: string; machine?: string }): Promise<unknown>',
       // Another project has no conversation of yours to default to: it reads conversation 1 unless one is named.
@@ -484,7 +483,7 @@ export default function codemode(host: ExtensionHost) {
     name: 'codemode',
     replay: 'unsafe',
     description:
-      'Run an async JavaScript function body in a QuickJS/WASM sandbox. Call tools.<name>(args), use Promise.all for parallel calls, text()/console.log() for output, return for JSON, store(key,value)/load(key) for durable conversation values (at most 256K characters of JSON per value, 1M in all). Store writes are saved only when the script finishes successfully; a yielded wait discards them. External side effects of completed nested tool calls are not rolled back on script failure or interruption; inspect completed calls in details.calls before retrying. No host I/O except injected functions. Nested results stay out of model context. Nested tool hooks do not run. The outer timeout defaults to 60 seconds and cancels nested work even if a nested Bash command has a longer timeout. Use the ordinary tool directly for a single simple long command. Optional first line: // @options: {"timeout_ms":60000,"max_output_tokens":10000}.\n\n' +
+      'Run an async JS body in QuickJS/WASM; host I/O only through injected functions. tools.<name>(args) calls tools; Promise.all runs parallel calls. text()/console.log() print, return yields JSON; nested results stay private and nested tool hooks do not run. store(key,value)/load(key) persist conversation values (JSON: 256K chars/value, 1M total) only on script success; a yielded wait discards them. Failure/interruption does not roll back completed nested side effects: inspect details.calls before retrying. Outer timeout: 60 s by default, cancelling nested work even with longer Bash timeouts; use a direct tool for one simple long command. Optional first line: // @options: {"timeout_ms":60000,"max_output_tokens":10000}.\n\n' +
       renderDeclarations({ globals: globalDeclarations }),
     parameters: obj({ code: str() }),
     async execute({ code: source }, api, context) {

@@ -17,6 +17,10 @@ it('ends a browser until when a steer arrives, and lets the run go on', async ()
     port: 0,
   })
   try {
+    const browser = (await server.root.agent(context)).deferred.find(
+      (tool) => tool.name === 'browser',
+    )!
+    await server.root.configure({ modelTools: { add: [browser] } }, context)
     const route: FauxResponseFactory = (transcript) => {
       server.host.faux!.appendResponses([route])
       const last = transcript.messages.at(-1)

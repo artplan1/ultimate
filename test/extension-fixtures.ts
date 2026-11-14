@@ -48,6 +48,9 @@ export async function fixture(settings?: string) {
   )
   return { home, projectRoot, server }
 }
-export const tools = async (server: FixtureServer) =>
-  (await server.root.agent(context)).tools.map((tool) => tool.name).toSorted()
+/** Enabled tools, including deferred ones: these fixtures test enablement, not model exposure. */
+export const tools = async (server: FixtureServer) => {
+  const agent = await server.root.agent(context)
+  return [...agent.tools, ...agent.deferred].map((tool) => tool.name).toSorted()
+}
 export const web = async (server: FixtureServer) => server.web.facets()

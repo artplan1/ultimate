@@ -68,7 +68,10 @@ async function open(options: Parameters<typeof fauxServer>[0]) {
   const enabled = (name: string) =>
     server.extensions.info().find((entry) => entry.name === name)?.enabled
   const web = async () => server.web.facets()
-  const tools = async () => (await server.root.agent(context)).tools.map((tool) => tool.name)
+  const tools = async () => {
+    const agent = await server.root.agent(context)
+    return [...agent.tools, ...agent.deferred].map((tool) => tool.name)
+  }
   return { server, action, enabled, web, tools }
 }
 

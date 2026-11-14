@@ -36,6 +36,7 @@ import type { ExtensionHost } from '../../../server/extensions.ts'
 import { Runs, Started, Subagents } from '../api.ts'
 import { Family } from '../../models/api.ts'
 import type { ActionContext } from '../../../server/actions.ts'
+import type { Api } from '../../../shared/extension-api.ts'
 import codemode from '../../codemode/server.ts'
 import { Metadata } from '../../../server/metadata.ts'
 import { UiState } from '../../../server/ui-state.ts'
@@ -67,6 +68,7 @@ async function fixture(
     transcript: Parameters<FauxResponseFactory>[0],
   ) => ReturnType<FauxResponseFactory> | undefined,
   watch = false,
+  services: Record<string, unknown> = {},
 ) {
   const ultimateRoot = await directory()
   const userHome = await directory()
@@ -96,7 +98,8 @@ async function fixture(
     harness: () => opened!.harness,
     metadata: Metadata,
     implement: () => {},
-    need: idleNeed,
+    need: <S>(api: Api<string, S>): S =>
+      (services as Record<string, S | undefined>)[api.name] ?? idleNeed(api),
     resource: (_key, create) => create(),
     extensions: () => [],
     notice: () => {},
@@ -433,6 +436,37 @@ it('keeps a named worker on its configured family unless a model is explicitly c
     })
     expect((await conversation.agent(context)).instructions).toBe('Implement the task.')
   }
+})
+
+it('tells an isolated child its worktree and a commit only when the task authorizes one', async () => {
+  const base = 'c'.repeat(40)
+  const workspace = {
+    path: '/tmp/ultimate-worktrees/7',
+    branch: 'ultimate/abcdef-7',
+    base,
+  }
+  const f = await fixture(undefined, undefined, undefined, undefined, false, {
+    workspaces: { create: async () => workspace, git: async () => '', get: async () => workspace },
+  })
+  await writeFile(
+    join(f.ultimateRoot, 'agents/worker.md'),
+    '---\nname: worker\ndescription: Implement\nisolate: worktree\ntools: [read, bash]\n---\nImplement the task.\n',
+  )
+  await call(f.opened, { action: 'start', agent: 'worker', task: 'Implement it' })
+  const child = (await children(f.opened)).at(-1)!
+  const conversation = (await f.opened.harness.conversation(child.conversationId, context))!
+  const { instructions = '' } = await conversation.agent(context)
+  expect(instructions).toContain(
+    `Work only in ${workspace.path} on ${workspace.branch}, cut from ${workspace.base}.`,
+  )
+  // The child may commit only under an authorization it was given, and reports the tree otherwise.
+  expect(instructions.match(/Commit your work[^.]*/)?.[0]).toMatch(
+    /^Commit your work on this branch only when the task or project authorizes delivery/,
+  )
+  expect(instructions).toContain(
+    'otherwise report verified working-tree changes without staging or committing.',
+  )
+  expect(instructions).toContain('Never push and never touch other checkouts.')
 })
 
 it('makes an agent on the fly from the call, read-only without a worktree, and refuses a model without a login', async () => {

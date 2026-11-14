@@ -36,10 +36,10 @@ you ⇄ @ultimate
         └─ lander → configured checks → main → push (if configured)
 ```
 
-- For each feature I start a **coordinator** branch. It plans, delegates to scouts (read), workers (code) and designers
-  (UI), and has a reviewer check the result.
-- Bigger work starts with an assessment: you get a short proposal with numbered decisions and nothing is built
-  before your go.
+- For each feature I start a **coordinator** branch. It does the work and hands parts to scouts (read), workers
+  (code) and designers (UI) where that pays off; anything substantial gets an independent review.
+- Ask me how something is best done, or for an assessment, and you get a short proposal with numbered decisions;
+  nothing is built before your go. Tell me to do something specific and it starts right away: your go is the go.
 - The **lander** runs the project's configured checks, merges into main and pushes only when configured. UI polish
   lands only after you approve a running preview.
 - Branches show in the sidebar under the project; open one any time to watch or steer it.

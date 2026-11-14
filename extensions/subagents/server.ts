@@ -1145,7 +1145,7 @@ export default function subagents(
                     parent.cwd ?? host.projectRoot,
                   )
                   await configure(tx, child.id, {
-                    instructions: `${definition.instructions}\nWork only in ${workspace.path} on ${workspace.branch}, cut from ${workspace.base}. Commit your work on this branch with clear messages. Never push and never touch other checkouts.`,
+                    instructions: `${definition.instructions}\nWork only in ${workspace.path} on ${workspace.branch}, cut from ${workspace.base}. Commit your work on this branch only when the task or project authorizes delivery, with clear messages; otherwise report verified working-tree changes without staging or committing. Never push and never touch other checkouts.`,
                   })
                 }
               }

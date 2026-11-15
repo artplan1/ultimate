@@ -25,7 +25,6 @@ import { FIRST_CHAPTER, requestChapter } from '../../../lib/chapters.ts'
 import { Store, SummaryDoc } from '../server.ts'
 import { Summarized } from '../refs.ts'
 import planExtension from '../../plan/server.ts'
-import lazyTools from '../../lazy-tools/server.ts'
 import type { ExtensionHost } from '../../../server/extensions.ts'
 import { Metadata } from '../../../server/metadata.ts'
 import type { CallTree } from '../../../server/trace.ts'
@@ -173,22 +172,33 @@ it('keeps codemode guidance without repeating top-level tool schemas', async () 
   expect(tool.description).toContain('declare const ultimate')
 })
 
-it('keeps the model-only loader out of script bindings and the available list', async () => {
+it('keeps a model-only tool out of script bindings and the available list', async () => {
   const { server } = await fixture()
   server.host.registry.install(
-    await lazyTools({ userHome: server.host.userHome, projectSettings: async () => ({}) }),
+    defineExtension({
+      name: 'model-only',
+      tools: [
+        defineTool({
+          name: 'model_only',
+          description: 'A tool only the model may call',
+          parameters: obj({}),
+          callers: ['model'],
+          execute: async () => ({ output: [{ type: 'text', text: 'called' }] }),
+        }),
+      ],
+    }),
   )
   const agent = await server.root.agent(context)
-  expect(agent.tools.some((tool) => tool.name === 'load_tools')).toBe(true)
+  expect(agent.tools.some((tool) => tool.name === 'model_only')).toBe(true)
   const section = server.host.registry.snapshot().extension('codemode')!.sections![0]
   const guidance = await section.render(
     { conversationId: server.root.id, agent } as Parameters<typeof section.render>[0],
     context,
   )
-  expect(guidance?.split('Available: ')[1].split(', ')).not.toContain('load_tools')
-  const result = await run(server, 'return await tools.load_tools({names: ["plan"]})')
+  expect(guidance?.split('Available: ')[1].split(', ')).not.toContain('model_only')
+  const result = await run(server, 'return await tools.model_only({})')
   expect(result.data.isError).toBe(true)
-  expect(result.text).toContain('load_tools')
+  expect(result.text).toContain('model_only')
   expect(result.data.details.calls).toEqual([])
 })
 
@@ -433,24 +443,14 @@ it('applies each automation call in one script to its own arguments', async () =
     home: join(home, 'state'),
   })
   servers.push(server)
-  server.host.faux!.setResponses([
-    fauxAssistantMessage([fauxToolCall('load_tools', { names: ['automation'] })], {
-      stopReason: 'toolUse',
-    }),
-    fauxAssistantMessage('Loaded'),
-  ])
-  await (
-    await server.root.submit({ type: 'input', content: 'Load automation' }, context)
-  ).wait(context)
   const result = await run(
     server,
     `const created = await tools.automation({action:'create', name:'Probe', schedule:'every 1d'});
      const id = created.split(' ')[0];
      await tools.automation({action:'subscribe', id, to:'@ultimate'});
      await tools.automation({action:'unsubscribe', id, to:'#${server.root.id}'});
-     const stored = (await ultimate.action('automations', 'list')).find(item => item.id === id);
-     const line = (await tools.automation({action:'list'})).split('\\n').find(row => row.startsWith(id + ' '));
-     return { line, subscribers: stored.subscribers };`,
+     const [stored] = await ultimate.action('automations', 'list');
+     return { line: await tools.automation({action:'list'}), subscribers: stored.subscribers };`,
   )
   expect(result.data.details.value).toEqual({
     line: 'A1 Probe — Every 1 day — enabled → @ultimate',

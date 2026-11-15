@@ -22,11 +22,6 @@ const owners: { id: Todo['owner']; label: string }[] = [
   { id: 'ultimate', label: '@ultimate' },
 ]
 
-/**
- * The project's to-dos: what waits on you (one Inbox row for the questions asked of you and the other extensions'
- * Inbox items, then your own to-dos), what @ultimate is still on, a field to add one for either of you, and the done
- * ones folded away. Inbox entries are answered in the Inbox.
- */
 export function Todos() {
   return <Waiting>{(entries) => <List questions={entries} />}</Waiting>
 }
@@ -56,7 +51,6 @@ function List({ questions }: { questions: readonly unknown[] }) {
   const change = (todo: Todo, text: string) =>
     void run(api.action(EditAction, { id: todo.id, text }))
   const { showSurface, switchConversation } = useUltimate()
-  // Sent as the user, like typing it into @ultimate's composer; a busy @ultimate takes it after its current run.
   const start = (todo: Todo) =>
     void run(
       (async () => {
@@ -139,7 +133,6 @@ function List({ questions }: { questions: readonly unknown[] }) {
   )
 }
 
-/** A labelled group of rows; an empty one says so in a quiet line rather than disappearing. */
 function Section({
   title,
   owner,
@@ -163,10 +156,6 @@ function Section({
   )
 }
 
-/**
- * One to-do: a check, its text and its age; ticking a done one reopens it. Its text changes in place through the
- * pencil, and an open one also offers, on hover or focus, to send @ultimate to work on it.
- */
 function TodoRow({
   todo,
   now,
@@ -181,8 +170,7 @@ function TodoRow({
   edit?: (todo: Todo, text: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  /** Whether the field closed from Escape, so its text is dropped rather than saved. */
-  const cancelled = useRef(false)
+  const closedByEscape = useRef(false)
   const at = todo.done ?? todo.at
   const age = formatAgo(at, now)
   const label =
@@ -199,18 +187,19 @@ function TodoRow({
           onBlur={(event) => {
             setEditing(false)
             const text = event.currentTarget.value.trim()
-            // Unchanged or emptied: nothing to change, and an empty to-do has no meaning.
-            if (!cancelled.current && text && text !== todo.text) edit?.(todo, text)
+            const changedToNonEmptyText = text.length > 0 && text !== todo.text
+            if (!closedByEscape.current && changedToNonEmptyText) edit?.(todo, text)
           }}
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-              // Without it, the keypress lands on the row and starts @ultimate on the to-do.
+            const enterSavesInsteadOfReachingTheRow =
+              event.key === 'Enter' && !event.nativeEvent.isComposing
+            if (enterSavesInsteadOfReachingTheRow) {
               event.preventDefault()
               event.currentTarget.blur()
             }
             if (event.key === 'Escape') {
-              cancelled.current = true
+              closedByEscape.current = true
               event.currentTarget.blur()
             }
           }}
@@ -266,7 +255,7 @@ function TodoRow({
             className="flex size-5 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             data-todo-change
             onClick={() => {
-              cancelled.current = false
+              closedByEscape.current = false
               setEditing(true)
             }}
             title="Change this to-do's text"
@@ -280,7 +269,6 @@ function TodoRow({
   )
 }
 
-/** The questions waiting on you, as one row: a click opens the Inbox, where each is answered. */
 function InboxRow({ count }: { count: number }) {
   const { showSurface } = useUltimate()
   return (
@@ -298,7 +286,6 @@ function InboxRow({ count }: { count: number }) {
   )
 }
 
-/** The add field: text, whose it is, Enter adds; the owner stays as last chosen. */
 function AddTodo({ add }: { add: (text: string, owner: Todo['owner']) => Promise<boolean> }) {
   const [text, setText] = useState('')
   const [owner, setOwner] = useState<Todo['owner']>('user')

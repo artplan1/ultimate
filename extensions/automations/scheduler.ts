@@ -14,6 +14,9 @@ import { RUN_TASK } from './types.ts'
 import type { Automations as Ledger } from './server.ts'
 import { Escalated, Fired } from './refs.ts'
 import { RunLabel } from './types.ts'
+const MAX_FIRES_PER_HOUR = 6
+const FIRE_WINDOW_MS = 3600000
+const RETAINED_RUNS = 50
 const owner = {
   ownership: { kind: 'conversation' as const },
   conversationId: ROOT_CONVERSATION_ID,
@@ -56,15 +59,16 @@ export function scheduler(
         try {
           if (!host.extensions().some((e) => e.name === 'subagents' && e.enabled))
             throw new Error('automations needs the subagents extension enabled')
-          // The root's agent for its tools, on the default model and thinking level: the root's stored model may have
-          // lost its login.
-          const parent = { ...(await runtime.agent(context)), ...(await hostDefault(host)) }
+          const rootToolsOnDefaultModel = {
+            ...(await runtime.agent(context)),
+            ...(await hostDefault(host)),
+          }
           const profile = a.agent ? await definition(host, a.agent) : undefined
           await runtime.commit(async (tx) => {
             const child = await host.need(SubagentsApi).createChild(tx, {
               owner: { kind: 'task', taskId: task.id },
               definition: profile,
-              parentAgent: parent,
+              parentAgent: rootToolsOnDefaultModel,
               modelRuntime: host.modelRuntime,
               metadata: host.metadata,
               label: RunLabel,
@@ -79,8 +83,6 @@ export function scheduler(
               (r) => r.id === String(task.id),
             )
             if (run) run.conversationId = child.id
-            // The fire's subscribers are woken here, where the run's conversation is known: a wake names it, so a
-            // subscriber that hears about the fire reads the run instead of doing the same work again.
             if (a.subscribers.length)
               await deliver(tx, a, String(task.id), 'fired', task.input.text ?? '', child.id)
             return { status: 'running', checkpoint: { phase: 'deliver', conversationId: child.id } }
@@ -95,7 +97,6 @@ export function scheduler(
               'failed',
               String(error),
             )
-            // No run conversation to name: the fire still reaches the subscribers that asked to hear about it.
             if (a.subscribers.length)
               await deliver(tx, a, String(task.id), 'fired', task.input.text ?? '')
             return terminal
@@ -161,13 +162,9 @@ export function scheduler(
         return { status: 'terminal', outcome: { status: 'aborted' } }
       }, context),
   })
-  /**
-   * Every trigger kind fires here, manual runs included. The seventh fire within an hour (`recentFires`) pauses the
-   * automation and escalates instead; an overlapping prompt run is recorded as skipped, not queued.
-   */
   async function fire(tx: Tx, a: Automation, firedAt: number, text = '') {
-    a.recentFires = (a.recentFires ?? []).filter((at) => at > firedAt - 3600000)
-    if (a.recentFires.length >= 6) {
+    a.recentFires = (a.recentFires ?? []).filter((at) => at > firedAt - FIRE_WINDOW_MS)
+    if (a.recentFires.length >= MAX_FIRES_PER_HOUR) {
       const reason = 'Fired more than 6 times in an hour; paused'
       a.enabled = false
       delete a.nextAt
@@ -179,15 +176,13 @@ export function scheduler(
       await deliver(tx, a, event.id, 'escalated', reason)
       return { id: a.id }
     }
-    // Scan for overlapping runs before any task/entry writes in this transaction.
-    const run = a.prompt ? await fireRun(tx, a, firedAt, text) : undefined
+    const run = a.prompt ? await skipOverlappingRunOrStart(tx, a, firedAt, text) : undefined
     a.recentFires.push(firedAt)
     a.fires++
     a.lastFireAt = firedAt
     const event = await host.emit(tx, Fired, { id: a.id, text, fire: a.fires })
-    // A fire that starts a run wakes its subscribers from that run's task, which knows the conversation to name. The
-    // others wake here: with no prompt, or when an overlapping run took the fire, which wakes the run it left to.
-    if (a.subscribers.length && run?.status !== 'running')
+    const runTaskWakesItsSubscribers = run?.status === 'running'
+    if (a.subscribers.length && !runTaskWakesItsSubscribers)
       await deliver(
         tx,
         a,
@@ -196,16 +191,17 @@ export function scheduler(
         text,
         a.runs.findLast((r) => r.status === 'running')?.conversationId,
       )
-    delete a.serves
+    consumeFirstFireRequest(a)
     return run ?? { id: a.id }
   }
   const activeRuns = new WeakMap<Tx, Set<string>>()
-  // One event can fire several automations. Read their overlaps before the first fire writes any entries/tasks.
-  async function prepareFires(tx: Tx): Promise<Set<string>> {
+  function consumeFirstFireRequest(a: Automation) {
+    delete a.serves
+  }
+  async function scanRunsBeforeWrites(tx: Tx): Promise<Set<string>> {
     const cached = activeRuns.get(tx)
     if (cached) return cached
     const ids = new Set<string>()
-    // A long run can outlive the bounded run history.
     for (const status of ['pending', 'running', 'waiting', 'completing'] as const) {
       let cursor: Cursor | undefined
       do {
@@ -222,8 +218,9 @@ export function scheduler(
     activeRuns.set(tx, ids)
     return ids
   }
-  async function fireRun(tx: Tx, a: Automation, firedAt: number, text: string) {
-    const running = a.runs.some((r) => r.status === 'running') || (await prepareFires(tx)).has(a.id)
+  async function skipOverlappingRunOrStart(tx: Tx, a: Automation, firedAt: number, text: string) {
+    const running =
+      a.runs.some((r) => r.status === 'running') || (await scanRunsBeforeWrites(tx)).has(a.id)
     if (running) {
       a.runs.push({ id: `skipped:${firedAt}`, firedAt, finishedAt: firedAt, status: 'skipped' })
     } else {
@@ -243,17 +240,15 @@ export function scheduler(
       activeRuns.get(tx)!.add(a.id)
       a.runs.push({ id: String(id), firedAt, status: 'running' })
     }
-    a.runs = a.runs.slice(-50)
+    a.runs = a.runs.slice(-RETAINED_RUNS)
     return a.runs.at(-1)!
   }
-  /**
-   * One root-owned task per enabled schedule: plan → sleep → fire. The sleep survives a restart; an overdue fire runs once
-   * on waking and a recurring schedule plans again from now. The fire, its run and the checkpoint commit together.
-   * Pause, edit and delete retire it (`a.scheduler` no longer names it) without stopping runs already started.
-   */
+  type PlanFromNow = { phase: 'plan' }
+  type FireOnceOnWake = { phase: 'fire'; until: number }
+  const retiredSchedulerOnly = terminal
   const Scheduler = defineTask<
     { id: string },
-    { phase: 'plan' } | { phase: 'sleep'; until: number } | { phase: 'fire'; until: number },
+    PlanFromNow | { phase: 'sleep'; until: number } | FireOnceOnWake,
     null
   >({
     name: 'ultimate.automation-scheduler',
@@ -263,14 +258,14 @@ export function scheduler(
       plan: (task, runtime, context) =>
         runtime.commit(async (tx) => {
           const a = (await tx.doc(Automations)).automations[task.input.id]
-          if (!a?.enabled || a.scheduler !== task.id) return terminal
-          const until =
-            a.nextAt ??
+          if (!a?.enabled || a.scheduler !== task.id) return retiredSchedulerOnly
+          const planFromNow = () =>
             nextAt(
               a.schedule!,
               Math.max(runtime.now(), a.lastFireAt ?? a.createdAt),
               a.lastFireAt ?? a.createdAt,
             )
+          const until = a.nextAt ?? planFromNow()
           a.nextAt = until
           return { status: 'running', checkpoint: { phase: 'sleep', until } }
         }, context),
@@ -281,15 +276,15 @@ export function scheduler(
           context,
         ),
       fire: (task, runtime, context) =>
-        runtime.commit(async (tx) => {
+        runtime.commit(async function atomicFireRunCheckpoint(tx) {
           const a = (await tx.doc(Automations)).automations[task.input.id]
-          if (!a?.enabled || a.scheduler !== task.id) return terminal
+          if (!a?.enabled || a.scheduler !== task.id) return retiredSchedulerOnly
           await fire(tx, a, runtime.now())
           delete a.nextAt
           if (!a.enabled || a.schedule!.kind === 'at') {
             a.enabled = false
             delete a.scheduler
-            return terminal
+            return retiredSchedulerOnly
           }
           return { status: 'running', checkpoint: { phase: 'plan' } }
         }, context),
@@ -298,7 +293,7 @@ export function scheduler(
       runtime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
   })
 
-  return { RunTask, Scheduler, fire, prepareFires }
+  return { RunTask, Scheduler, fire, scanRunsBeforeWrites }
 }
 function finish(
   state: { automations: Record<string, Automation> },

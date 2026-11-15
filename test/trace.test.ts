@@ -8,7 +8,7 @@ import { eventLog } from '../server/events.ts'
 import { defineEvent } from '../shared/events.ts'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { fauxProvider } from '@earendil-works/pi-ai/providers/faux'
-import { classify } from '../lib/model-error.ts'
+import { classifyWithoutProviderText } from '../lib/model-error.ts'
 import { guardToolArguments } from '../server/tool-arguments.ts'
 import { callTrace, summary, traceContext } from '../server/trace.ts'
 import type { Call, CallTree } from '../server/trace.ts'
@@ -198,6 +198,36 @@ it('records secrets actions without arguments or results', async () => {
   expect(JSON.stringify(server.extensions.trace.query())).not.toContain('hunter2')
 })
 
+it('keeps a provider credential store out of traced arguments and results', async () => {
+  const server = await start()
+  // What `conversations.askSummaryModel` receives in a real call: the model runtime, whose credential store holds
+  // provider tokens, beside the summary request's own fields.
+  const access = 'FAKE_ACCESS_FOR_REDACTION_PROBE'
+  const models = {
+    providers: {},
+    credentials: {
+      store: {
+        authPath: '/fake/auth.json',
+        readState: { data: { 'openai-codex': { type: 'oauth', access } } },
+      },
+    },
+  }
+  await server.extensions.invoke(
+    'alpha',
+    'go',
+    { models, systemPrompt: 'Summarize', input: 'text' },
+    signal,
+  )
+  const work = server.extensions.trace.query().find((row) => row.name === 'beta.work')!
+  expect(work.args).toContain('"systemPrompt":"Summarize"')
+  expect(work.result).toContain('"systemPrompt":"Summarize"')
+  expect(work.args).toContain('"providers":{}')
+  for (const row of server.extensions.trace.query()) {
+    expect(row.args ?? '').not.toContain(access)
+    expect(row.result ?? '').not.toContain(access)
+  }
+})
+
 it('links a tool call to its conversation and tool-call entry, with service calls as children', async () => {
   const server = await start()
   server.host.faux!.setResponses([
@@ -292,8 +322,8 @@ it('records a failed model call by classification only, never the provider messa
     conversation: 7,
   })
   expect(JSON.stringify(trace.reader.query())).not.toContain('SENTINEL')
-  expect(classify('aborted')).toBe('aborted')
-  expect(classify('error', 'socket hang up: ECONNRESET at status: 503')).toBe(
+  expect(classifyWithoutProviderText('aborted')).toBe('aborted')
+  expect(classifyWithoutProviderText('error', 'socket hang up: ECONNRESET at status: 503')).toBe(
     'error 503 ECONNRESET',
   )
 

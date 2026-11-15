@@ -17,10 +17,6 @@ import { ConversationsApi } from '../conversations/api.ts'
 import { Started } from './refs.ts'
 import { Profile } from './api.ts'
 
-/**
- * Emit `subagents.started` for `conversation`, configured in `tx` to run as `agent`: its model and thinking level as
- * configured, and its parent, the owner or else the fork source.
- */
 export async function started(
   host: Pick<ExtensionHost, 'emit'>,
   tx: Tx,
@@ -40,10 +36,6 @@ export async function started(
   })
 }
 
-/**
- * Configure existing conversation `id` from `definition` over `parent`: its current tools, extensions and instructions,
- * while the model and thinking chosen in it stay unless the definition pins them. Its cwd stays.
- */
 export async function reconfigure(
   tx: Tx,
   id: ConversationId,
@@ -52,21 +44,17 @@ export async function reconfigure(
   modelRuntime: ModelRuntime,
 ) {
   const own = await tx.doc(AgentDoc, id)
-  const base = {
+  const currentModelSettings = {
     ...parent,
     ...(own.model ? { model: own.model } : {}),
     ...(own.thinkingLevel ? { thinkingLevel: own.thinkingLevel } : {}),
   }
-  const change = definitionAgent(definition, base, modelRuntime)
+  const change = definitionAgent(definition, currentModelSettings, modelRuntime)
   await configure(tx, id, change)
   ;(await tx.doc(Family, id)).name = definitionFamily(definition, change)
   ;(await tx.doc(Profile, id)).definition = definition.name
 }
 
-/**
- * A conversation configured from a definition (or as a copy of the parent's agent), new or forked at `fork.at`; a
- * definition with `summaries: false` turns its automatic summaries off.
- */
 export async function createChild(
   host: Pick<ExtensionHost, 'need'>,
   tx: Tx,
@@ -84,7 +72,6 @@ export async function createChild(
     excludeExtensions?: string[]
     model?: { provider: string; modelId: string }
     thinking?: ModelThinkingLevel
-    /** `definition` was made on the fly: no file of its name, so the profile records none. */
     adhoc?: true
   },
 ) {
@@ -99,11 +86,10 @@ export async function createChild(
     ...change,
     cwd: options.cwd ?? parent.cwd ?? null,
   })
-  // An explicit model is no family's; a fork would otherwise keep its parent's. An agent made on the fly runs the
-  // caller's model, so it records none either: `default` named a family whose model it does not run, while the picker
-  // falls back to the default family only while the model and thinking level match it.
-  ;(await tx.doc(Family, child.id)).name =
+  const family = await tx.doc(Family, child.id)
+  const explicitModelOrAdhocAgentHasNoFamily =
     options.model || options.adhoc ? null : definitionFamily(definition, change)
+  family.name = explicitModelOrAdhocAgentHasNoFamily
   Object.assign(await tx.doc(options.metadata, child.id), {
     label: options.label,
     title: options.title,

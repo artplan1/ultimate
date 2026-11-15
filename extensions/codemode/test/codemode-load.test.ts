@@ -13,12 +13,17 @@ it('reads ps lines into the heaviest processes, with the executable name alone',
     '',
   ].join('\n')
   expect(readPs(ps)).toEqual([
-    { pid: 429, cpu: 74.8, memory: 122496 * 1024, command: 'WindowServer' },
-    { pid: 60455, cpu: 55.9, memory: 361472 * 1024, command: 'Google Chrome Helper (Renderer)' },
-    { pid: 24782, cpu: 51.9, memory: 4160 * 1024, command: 'vitest' },
-    { pid: 812, cpu: 0.4, memory: 20480 * 1024, command: 'logd' },
+    { pid: 429, cpu: 74.8, memory: 122496 * 1024, executableName: 'WindowServer' },
+    {
+      pid: 60455,
+      cpu: 55.9,
+      memory: 361472 * 1024,
+      executableName: 'Google Chrome Helper (Renderer)',
+    },
+    { pid: 24782, cpu: 51.9, memory: 4160 * 1024, executableName: 'vitest' },
+    { pid: 812, cpu: 0.4, memory: 20480 * 1024, executableName: 'logd' },
     // Equal CPU: the larger process first.
-    { pid: 1011, cpu: 0.1, memory: 65536 * 1024, command: 'cfprefsd' },
+    { pid: 1011, cpu: 0.1, memory: 65536 * 1024, executableName: 'cfprefsd' },
   ])
 })
 

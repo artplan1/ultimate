@@ -1,4 +1,3 @@
-import { offsetEntryId } from '../../../lib/ids.ts'
 import type {
   AgentState,
   EntryRecord,
@@ -27,6 +26,7 @@ import { actions, allCommands, ownDefault, regionKeys, shellKeys, shownSurface }
 import type { Region } from './actions.ts'
 import { ROOT } from './api.ts'
 import { EVENT_FEED } from '../../../shared/events.ts'
+import { historyCursorFromStreamBefore } from '../../../shared/protocol.ts'
 import type { StreamedView } from '../../../shared/protocol.ts'
 import type { EventData, EventRecord, EventToken } from '../../../shared/events.ts'
 import type { ActionArgs, ActionError } from './api.ts'
@@ -110,7 +110,7 @@ function derive(view: StreamedView | undefined): ConversationState {
       id: view.conversation.id,
       loading: false,
       entries: view.entries,
-      older: view.before === undefined ? undefined : offsetEntryId(view.before, 1),
+      older: historyCursorFromStreamBefore(view.before),
       agent: docs['pi.agent'] ?? {},
       usage: (docs['pi.usage'] ?? empty.usage) as UsageState,
       live,
@@ -235,7 +235,6 @@ export function useUltimate(): UltimateContext {
   return useMemo(() => ({ ...actions, conversationId, surface }), [conversationId, surface])
 }
 
-/** `shownSurface()` that re-renders when the facets, the choice, or the project's default change. */
 export function useShownSurface() {
   const records = useExtensions()
   const [chosen] = useUiState<JsonValue>(shellKeys.surface, null)
@@ -264,7 +263,7 @@ export function useUiState<T extends JsonValue>(
   )
   return [(stored ?? initial) as Widen<T>, set]
 }
-/** Whether the sidebar or the panel is open: shared on a desktop, this tab's own below it (viewport.ts). */
+
 export function useRegionOpen(region: Region) {
   const [key, fallback] = regionKeys[region]
   const [shared] = useUiState<boolean>(key, fallback)
@@ -284,7 +283,7 @@ export function usePanels() {
   const [selected] = useUiState<string | null>(shellKeys.panel, null)
   return { open, ...shownPanels(panels, selected) }
 }
-/** `true` → boolean, `'a'` → string: an initial value names its type, not the only value. */
+
 export type Widen<T> = T extends boolean
   ? boolean
   : T extends string
@@ -304,7 +303,6 @@ export function useTranscript(): readonly EntryRecord[] {
   return entries ?? (scoped === undefined ? empty.entries : active)
 }
 
-/** The extension whose contribution is rendering; the shell provides it. */
 export const ExtensionNameContext = createContext<string | undefined>(undefined)
 
 /** `useUiState` under `ext.<extension name>.<key>`, for state an extension's UI keeps across reloads. */
@@ -328,12 +326,12 @@ export function useExtensions() {
   return useSyncExternalStore(registry.subscribe, registry.getSnapshot)
 }
 const compactFailures = new Set<string>()
-/** Reports a `compact.when` that threw once per message, as a notice naming its extension. */
+
 function reportCompact(extension: string, error: unknown) {
   const message = `extension ${extension}: compact is off, its when() threw: ${errorMessage(error)}`
   if (compactFailures.has(message)) return
   compactFailures.add(message)
-  // Predicates run while React renders the transcript; notify after that render.
+
   queueMicrotask(() => store.notify({ level: 'error', message }))
 }
 const noDocs = {}
@@ -345,10 +343,7 @@ export function useCompact(): ((call: ToolCall) => boolean) | undefined {
   const { compact, docs } = useCompactConfig()
   return useMemo(() => compact && ((call: ToolCall) => compact.keeps(call, docs)), [compact, docs])
 }
-/**
- * Which rows of the shown compact transcript are the thread the reader follows, and the line a receded stretch between
- * them shows (`compact` contributions' `thread` and `summary`), else `undefined`.
- */
+
 export function useCompactThread() {
   const { compact, docs } = useCompactConfig()
   return useMemo(() => {
@@ -405,8 +400,8 @@ export function useRestart(timeoutMs = 120000): Restart {
   const [state, setState] = useState<{
     phase: 'idle' | 'asking' | 'swapping'
     target?: number
-    /** System info when the stream dropped; a different object after reconnecting is fresh. */
-    dropped?: object
+
+    systemSnapshotAtStreamDrop?: object
     error?: string
   }>({ phase: 'idle' })
   const serving = system?.process.generation ?? 0
@@ -416,11 +411,16 @@ export function useRestart(timeoutMs = 120000): Restart {
       setState({ phase: 'idle' })
       return undefined
     }
-    if (connection !== 'open' && !state.dropped) {
-      setState({ ...state, dropped: system ?? {} })
+    if (connection !== 'open' && !state.systemSnapshotAtStreamDrop) {
+      setState({ ...state, systemSnapshotAtStreamDrop: system ?? {} })
       return undefined
     }
-    if (state.dropped && connection === 'open' && system && system !== state.dropped) {
+    if (
+      state.systemSnapshotAtStreamDrop &&
+      connection === 'open' &&
+      system &&
+      system !== state.systemSnapshotAtStreamDrop
+    ) {
       setState({
         phase: 'idle',
         error: `Generation ${state.target} failed to activate and was rolled back; generation ${serving} keeps serving. The reason is in the supervisor's output.`,
@@ -489,10 +489,10 @@ export function useAction<Args, T>(
   ref: ActionRef<Args, T>,
   ...[args, options = {}]: ActionArgs<Args, UseActionOptions>
 ): ActionState<T> {
-  // The conversation the call acts on, scoped or shown, keys the read: answers of another conversation never serve it.
   const scoped = useContext(ConversationIdContext)
   const shown = useStore((state) => state.view?.conversation.id ?? state.requested ?? ROOT)
-  const read = reads.get(ref.extension, ref.name, args, scoped ?? shown)
+  const readConversation = scoped ?? shown
+  const read = reads.get(ref.extension, ref.name, args, readConversation)
   const state = useSyncExternalStore(read.subscribe, read.get)
   const enabled = options.enabled !== false
   const reader = useRef<Reader>({}).current
@@ -549,6 +549,7 @@ export function useToolDuration(call: ToolCallView): string | undefined {
   const running = call.startedAt !== undefined && call.endedAt === undefined
   const now = useNow(100, running)
   if (call.startedAt === undefined) return undefined
-  // The start is the server's clock; a browser clock behind it must not show a negative time.
-  return formatDuration(Math.max(0, (call.endedAt ?? now) - call.startedAt))
+
+  const elapsedMsWithoutNegativeClockSkew = Math.max(0, (call.endedAt ?? now) - call.startedAt)
+  return formatDuration(elapsedMsWithoutNegativeClockSkew)
 }

@@ -60,7 +60,7 @@ A landing wakes you with its card; report the outcome and divergence, following 
 
 Use `remember {ops}` for standing facts, decisions and lessons, not notes to the root. Never remember runtime state already supplied by its owning extension. Branches start from the memory brief or tally; read history with `ultimate.entries(root)` and name relevant memory slugs in the brief. For memory review, follow `extensions/lineage/README.md` (“Memory review”): the review branch proposes ops without writing; you apply the user's choices in one batch.
 
-Track open work with `todo {action: 'add', text, owner}` (`ultimate` or `user`), and mark it done when resolved. Questions already wait in the Inbox, so do not duplicate them as to-dos. Codemode `store` is private working state, not the project's open-work list. Use `compact` when context grows large or a phase ends, then end the turn.
+Track open work with `todo {action: 'add', text, owner}` (`ultimate` or `user`), and mark it done when resolved. Questions already wait in the Inbox, so do not duplicate them as to-dos. Codemode `store` is private working state, not the project's open-work list. Use Dream, not an unsolicited `compact`, for planned context reduction; follow `extensions/dream/DREAM.md`. A phase ending alone is not a reason to compact. Keep `compact` for an explicit user request; automatic Pi compaction is unchanged.
 
 ## Read on demand
 

@@ -14,7 +14,6 @@ import {
   defineTask,
   ROOT_CONVERSATION_ID,
 } from '@earendil-works/pi-durable'
-import type { ConversationId } from '@earendil-works/pi-durable'
 import type { ExtensionHost } from '../../server/extensions.ts'
 import { Standing, SubagentsApi } from '../subagents/api.ts'
 import { locate, postAction } from '../../lib/remote.ts'
@@ -23,6 +22,7 @@ import type { Message } from './api.ts'
 import { imagesOf } from '../../lib/entries.ts'
 import { append, terminal } from './log.ts'
 import { remoteLabel, servesLine } from './addresses.ts'
+import { MessageEntry, ReplyEntry } from './refs.ts'
 
 // The answer and recipient identify delivery, not the request that happened to observe it.
 // Keep receipts outside the bounded message log so late observers and reopened tasks still find them.
@@ -77,14 +77,14 @@ export function delivery(host: ExtensionHost) {
         const m = task.input.message
         if (typeof m.to !== 'number') throw new Error('Only conversations take a delivery')
         await refresh(m.to, ctx)
-        const recipient = await host.harness().conversation(m.to as ConversationId, ctx)
+        const recipient = await host.harness().conversation(m.to, ctx)
         if (!recipient) throw new Error(`Unknown conversation #${m.to}`)
         // Entries never change, so a replayed delivery attaches the same images.
         const images = m.images
           ? imagesOf(await host.harness().commit((tx) => tx.entry(m.images!.entry), ctx))
           : []
         const entry = {
-          kind: 'board.message',
+          kind: MessageEntry.kind,
           data: {
             id: m.id,
             from: m.from,
@@ -302,13 +302,13 @@ export function delivery(host: ExtensionHost) {
         }
         if (m.to !== 'user') {
           await refresh(m.to, ctx)
-          const sender = await runtime.conversation(m.to as ConversationId, ctx)
+          const sender = await runtime.conversation(m.to, ctx)
           // Entries never change, so a replayed reply attaches the same images.
           const images = m.images
             ? imagesOf(await host.harness().commit((tx) => tx.entry(m.images!.entry), ctx))
             : []
           const entry = {
-            kind: 'board.reply',
+            kind: ReplyEntry.kind,
             data: {
               id: m.id,
               re: m.re!,

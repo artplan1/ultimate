@@ -1,3 +1,4 @@
+import type { ConversationId, EntryId } from '@earendil-works/pi-durable'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable'
@@ -40,12 +41,25 @@ it('shows a landed branch as its landing range once its ref is gone, and moves o
   })
   try {
     const workspace = { path: join(home, 'gone'), base, source: project, target: 'main' }
-    const lander = { target: 'main', lander: 3, steps: [], at: 1, divergence: 'None' }
+    const lander = {
+      target: 'main',
+      lander: 3 as ConversationId,
+      steps: [],
+      at: 1 as EntryId,
+      divergence: 'None',
+    }
     await server.harness.commit(async (tx) => {
       const index = await tx.doc(Workspaces, ROOT_CONVERSATION_ID)
       index.items['7'] = { ...workspace, branch: 'ultimate/feature', state: 'removed', landed: tip }
       index.items['8'] = { ...workspace, branch: 'ultimate/dropped', state: 'removed' }
-      index.results.s1 = { ...lander, outcome: 'landed', sha: tip, base, tip, conversationId: 7 }
+      index.results.s1 = {
+        ...lander,
+        outcome: 'landed',
+        sha: tip,
+        base,
+        tip,
+        conversationId: 7 as ConversationId,
+      }
     }, context)
     const diff = async (spec: string) =>
       (await post(server, '/api/extensions/review/actions/diff', { args: { spec } })).data.result
@@ -89,12 +103,12 @@ it('shows a landed branch as its landing range once its ref is gone, and moves o
       await emit(tx, SubmissionLanded, {
         submission: 's1',
         conversationId: target,
-        at: 1,
+        at: 1 as EntryId,
         sha: tip,
         base,
         target: 'main',
         submitted: tip,
-        lander: 3,
+        lander: 3 as ConversationId,
         divergence: 'None',
         title: 'Commit owner',
         commits: [{ sha: tip, subject: 'add feature' }],

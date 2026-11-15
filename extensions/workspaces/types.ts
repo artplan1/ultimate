@@ -1,3 +1,4 @@
+import type { ConversationId, EntryId, TaskId } from '@earendil-works/pi-durable'
 import type { ConversationSubject } from '../conversations/types.ts'
 
 export type Workspace = {
@@ -13,13 +14,13 @@ export type Workspace = {
 /** One `workspace submit`, waiting for or being processed by its repository's lander. */
 export type QueueEntry = {
   id: string
-  conversationId: number
+  conversationId: ConversationId
   /** The lander key: the repository's main checkout, whatever checkout of it the submitter works in. */
   source: string
   target: string
   tip: string
   /** Latest submitting conversation entry when submit was called. */
-  at: number
+  at: EntryId
   divergence: string
   state: 'queued' | 'landing'
   subject?: ConversationSubject
@@ -77,12 +78,12 @@ export type LanderOutcome = {
 /** One line of a lander conversation's log (entry kind `ultimate.lander`): a step, a check result, or the outcome. */
 export type LanderEntry = {
   submission: string
-  conversationId: number
+  conversationId: ConversationId
   tip: string
   target: string
   at: number
   /** Submitting conversation breadcrumb, not the log timestamp. */
-  sourceEntry?: number
+  sourceEntry?: EntryId
   step?: string
   runs?: string
   check?: LanderCheck
@@ -93,20 +94,20 @@ export type WorkspaceIndex = {
   items: Record<string, Workspace>
   queue: QueueEntry[]
   /** Live lander task per repository, by its main checkout. */
-  landers: Record<string, number>
+  landers: Record<string, TaskId>
   /** The lander conversation per repository, where its task runs and logs. */
-  landerConversations: Record<string, number>
+  landerConversations: Record<string, ConversationId>
   /** Outcomes of the latest submissions by id, with their target and lander conversation, for the submitter's cards. */
   results: Record<
     string,
     LanderOutcome & {
       target: string
       tip: string
-      lander: number
+      lander: ConversationId
       steps: LanderStep[]
-      conversationId?: number
+      conversationId?: ConversationId
       subject?: ConversationSubject
-      at: number
+      at: EntryId
       divergence: string
     }
   >
@@ -136,7 +137,7 @@ export type LandResult = {
   files?: { path: string; added: number; removed: number }[]
   needsRestart?: boolean
 }
-export type SubmitResult = { text: string; id: string; position: number; lander: number }
+export type SubmitResult = { text: string; id: string; position: number; lander: ConversationId }
 
 /** A project's GitHub repository as the sidebar and the project rail name it. */
 export type GithubRepo = {

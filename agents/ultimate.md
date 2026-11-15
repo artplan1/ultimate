@@ -44,7 +44,7 @@ You may write configuration: settings, agent definitions, skills and their small
 
 ## Communicating
 
-The user talks to you here; branches ask their own questions after you weigh in. After starting a branch, end your turn: its reply wakes you. A final answer goes to whoever woke you and to branches whose reports or replies you read in that run; address them by #id when several arrived. Send other user-facing results through `message {to: 'user', text}`; never repeat a sent message in the final answer.
+The user talks to you here; branches ask their own questions after you weigh in. After starting a branch, end your turn: its reply wakes you. A final answer goes to whoever woke you and to branches whose reports or replies you read in that run; address them by #id when several arrived. When a branch's result needs the user's attention—completion, a blocker or a working-tree review—send it through `message {to: 'user', text}`. A final answer routed back to the branch may fold into background updates; it does not replace that user message. Do not repeat an already sent result or forward routine progress updates.
 
 For a branch's unresolved user decisions, answer one of:
 

@@ -1,4 +1,6 @@
-import type { EntryRecord } from '@earendil-works/pi-durable'
+import { parseConversationId, offsetEntryId } from '../../lib/ids.ts'
+import type { EntryRecord, ConversationId, EntryId } from '@earendil-works/pi-durable'
+import { ROOT } from '@/sdk'
 import {
   CheckIcon,
   CornerDownRightIcon,
@@ -61,6 +63,7 @@ import { imagesOf } from '../../lib/entries.ts'
 import { waitsForReply } from '../../lib/message-state.ts'
 import { callerOf } from './caller.ts'
 import { MessagesDoc } from './refs.ts'
+import { MessageEntry, ReplyEntry } from './refs.ts'
 import type { Message, Question, Remote } from './refs.ts'
 import { MessageAnswers } from './points.tsx'
 
@@ -83,7 +86,7 @@ const settledLabel = (question: Message, answer: Message) =>
 
 /** The accent of sender `id`: @ultimate's fixed one when the standing agents name it, else `accentOf`. */
 export function useAccentOf(id: number | 'user' | 'remote') {
-  const standing = useDocOf(1, StandingDoc)
+  const standing = useDocOf(ROOT, StandingDoc)
   return accentOf(standing?.ultimate === id ? 'ultimate' : id)
 }
 
@@ -97,11 +100,11 @@ export function Address({
   mark = false,
   remote,
 }: {
-  id: number | 'user' | 'remote'
+  id: ConversationId | 'user' | 'remote'
   mark?: boolean
   remote?: Pick<Remote, 'project' | 'machine'>
 }) {
-  const standing = useDocOf(1, StandingDoc)
+  const standing = useDocOf(ROOT, StandingDoc)
   const workspaces = useWorkspaceIndex()
   const ultimate = useAgentTitle('ultimate')
   if (id === 'user') return <span>you</span>
@@ -153,7 +156,13 @@ export function Body({ text, pending }: { text: string; pending?: string }) {
 }
 
 /** Who waits on whom, in words: an open question to the user stands out, other open requests stay amber-muted. */
-function Status({ message, perspective }: { message: Message; perspective: number | 'user' }) {
+function Status({
+  message,
+  perspective,
+}: {
+  message: Message
+  perspective: ConversationId | 'user'
+}) {
   const status = messageStatus(message)
   if (status === 'yours')
     return (
@@ -195,7 +204,7 @@ export function Bubble({
   lead,
   children,
 }: {
-  from: number
+  from: ConversationId
   message: Message | undefined
   text?: string
   running: boolean
@@ -206,7 +215,7 @@ export function Bubble({
   children?: ReactNode
 }) {
   const now = useNow(60000)
-  const log = useDocOf(1, MessagesDoc)
+  const log = useDocOf(ROOT, MessagesDoc)
   const accent = useAccentOf(from)
   const status = sentStatus(message, running)
   const stored = entry?.model?.[0]
@@ -286,8 +295,8 @@ export function Bubble({
  * Who wrote a bubble, as its header names it: a standing agent by its mark and title in the sans face, anything else
  * as its address.
  */
-function Sender({ id, tone }: { id: number; tone: string }) {
-  const standing = useDocOf(1, StandingDoc)
+function Sender({ id, tone }: { id: ConversationId; tone: string }) {
+  const standing = useDocOf(ROOT, StandingDoc)
   const name = Object.entries(standing ?? {}).find(([, value]) => value === id)?.[0]
   if (!name)
     return (
@@ -359,7 +368,7 @@ function AttachedAnswer({ answer, question }: { answer: Message; question: Messa
  * app reloaded, so the reader knows whether to open it.
  */
 export function StretchSummary({ rows, steps, working, entries }: CompactSummaryProps) {
-  const log = useDocOf(1, MessagesDoc) ?? emptyMessages
+  const log = useDocOf(ROOT, MessagesDoc) ?? emptyMessages
   // Against the whole transcript: a stretch's first response compares with the one before the stretch.
   const busts = cacheBusts(useTranscript())
   // A response split over rows (a run of work and its visible message call) counts once.
@@ -418,7 +427,7 @@ export function StretchSummary({ rows, steps, working, entries }: CompactSummary
  * to you is a bubble.
  */
 export function MessageCall({ call, core }: { call: ToolCallView; core: ReactNode }) {
-  const log = useDocOf(1, MessagesDoc)
+  const log = useDocOf(ROOT, MessagesDoc)
   const { switchConversation, showSurface } = useUltimate()
   const sender = useConversation((conversation) => conversation.id)
   const caller = useCaller(call.id)
@@ -495,16 +504,16 @@ export function MessageCall({ call, core }: { call: ToolCallView; core: ReactNod
             {message?.images && ` · ${imageCount(message.images.count)}`}
           </span>
           {state && <span className={state === 'failed' ? 'text-destructive' : ''}>· {state}</span>}
-          {message && typeof message.to === 'number' && message.entry !== undefined && (
+          {message && typeof recipient === 'number' && message.entry !== undefined && (
             <button
               className="ml-auto flex cursor-pointer items-center gap-1 hover:text-foreground"
               onClick={() => {
                 events.emit('messages:open', {
-                  conversation: message.to,
+                  conversation: recipient,
                   entry: message.entry,
                 })
                 showSurface('agent')
-                switchConversation(message.to as number)
+                switchConversation(recipient)
               }}
             >
               <SquareArrowOutUpRightIcon className="size-3" />
@@ -526,10 +535,10 @@ export function MessageCall({ call, core }: { call: ToolCallView; core: ReactNod
 
 /** The `branch` tool as the branch it started and the prompt it was given; a failed call keeps the generic card. */
 export function BranchCall({ call, core }: { call: ToolCallView; core: ReactNode }) {
-  const log = useDocOf(1, MessagesDoc)
+  const log = useDocOf(ROOT, MessagesDoc)
   const { switchConversation, showSurface } = useUltimate()
   const started = /^Branch #(\d+) started; message (\d+) sent\.$/.exec(call.output)
-  const id = started ? Number(started[1]) : undefined
+  const id = started ? parseConversationId(Number(started[1])) : undefined
   const title = useConversationSummary(id)?.title
   const workspaces = useWorkspaceIndex().items
   if (call.status === 'error' || call.status === 'interrupted') return core
@@ -625,20 +634,12 @@ export function BranchCall({ call, core }: { call: ToolCallView; core: ReactNode
 }
 
 export function MessageInput({ entry }: { entry: EntryRecord }) {
-  const origin = entry.data as {
-    id: number
-    from: number | 'user' | 'remote'
-    text: string
-    reply: boolean
-    delivery?: 'steer' | 'followUp' | 'note'
-    failed?: boolean
-    stopped?: boolean
-    remote?: Remote
-  }
+  const origin = MessageEntry.is(entry) || ReplyEntry.is(entry) ? entry.data : undefined
   const receiver = useConversation((conversation) => conversation.id)
   const { switchConversation } = useUltimate()
   const reply = entry.kind === 'board.reply'
-  const accent = useAccentOf(origin.from)
+  const accent = useAccentOf(origin?.from ?? 'user')
+  if (!origin) return null
   if (origin.from === 'user') return <UserTurn entry={entry} id={origin.id} text={origin.text} />
   return (
     <Fold
@@ -717,7 +718,7 @@ export function MessageInput({ entry }: { entry: EntryRecord }) {
  * already is a one-line reference to that question instead.
  */
 function UserTurn({ entry, id, text }: { entry: EntryRecord; id: number; text: string }) {
-  const log = useDocOf(1, MessagesDoc)
+  const log = useDocOf(ROOT, MessagesDoc)
   const transcript = useTranscript()
   const message = log?.messages.find((m) => m.id === id)
   const question =
@@ -767,7 +768,13 @@ const InputImages = ({ entry }: { entry: EntryRecord }) => <Thumbnails images={i
  * The images a message to you carries: they stay in the sender's entry `entry` (a screenshot, a pasted input), read from
  * the loaded transcript or else fetched from its stored history.
  */
-export function MessageImages({ conversation, entry }: { conversation: number; entry: number }) {
+export function MessageImages({
+  conversation,
+  entry,
+}: {
+  conversation: ConversationId
+  entry: EntryId
+}) {
   const loaded = useTranscript().find(
     (item) => item.conversationId === conversation && item.id === entry,
   )
@@ -775,7 +782,7 @@ export function MessageImages({ conversation, entry }: { conversation: number; e
   useEffect(() => {
     if (loaded) return undefined
     const controller = new AbortController()
-    api.history(conversation, entry + 1, controller.signal, entry).then(
+    api.history(conversation, offsetEntryId(entry, 1), controller.signal, entry).then(
       (page) => setFetched(page.entries.find((item) => item.id === entry)),
       // Without its entry the message still reads; only the thumbnails are missing.
       () => undefined,
@@ -790,7 +797,6 @@ function Thumbnails({ images }: { images: readonly { data: string; mimeType: str
   return (
     <div className="flex flex-wrap gap-2 border-t border-border/60 px-3 py-2">
       {images.map((image, index) => (
-        // oxlint-disable-next-line react/no-array-index-key -- Fixed forwarded attachments may contain duplicates.
         <ToolImage alt={`Forwarded image ${index + 1}`} image={image} key={index} />
       ))}
     </div>
@@ -840,7 +846,7 @@ function ScriptMessages({
   core: ReactNode
   shown: readonly { id: string; name: string }[]
 }) {
-  const log = useDocOf(1, MessagesDoc) ?? emptyMessages
+  const log = useDocOf(ROOT, MessagesDoc) ?? emptyMessages
   const sent = shown.flatMap((block) =>
     block.name === 'codemode' ? sentBy(log.messages, block.id) : [],
   )
@@ -889,7 +895,7 @@ function ReplyFold({
   text: string
   at: number
 }) {
-  const log = useDocOf(1, MessagesDoc) ?? emptyMessages
+  const log = useDocOf(ROOT, MessagesDoc) ?? emptyMessages
   const answered = answeredMessages(log.messages, entry.conversationId, entry.id)
   if (!answered.length || answered.some((m) => !m.reply || m.from === 'user'))
     // An answer to you is a bubble like its messages, not a final-answer card.

@@ -81,19 +81,38 @@ publishing, deployments or GitHub issue/PR changes ([landing and pushing](docs/w
 - `pnpm check` (format, lint, types; it fails on an import cycle or a core-tier extension depending on an optional one)
   and the tests covering your change pass before a commit; the lander runs only `lander.checks` (here `pnpm check`), so
   your branch owns its suites. No real waits or spawned processes in `pnpm test`; fix or delete a flaky test, never
-  skip it or give it a longer timeout; wait with `until` from `test/helpers.ts`, not a loop of your own; keep retired
-  labels and surfaces out ([checks and lint rules](docs/conventions.md#lint-rules)).
+  skip it or give it a longer timeout; wait with `until` from `test/helpers.ts`, not a loop of your own. Tests may break
+  production rules when that makes them simpler and more robust; different rules apply to them.
 - Every user-visible result is designed, not dumped: status and outcomes get a card matching the existing ones, never
   plain Markdown; write the expected look into the task and check screenshots against it
   ([cards](docs/conventions.md#designed-not-dumped)).
 
 ## Review quality
 
-Rules about agent behaviour live in prompts and agent definitions, not in code; code checks protect only safety and
-invalid states; lint enforces only what the user asked for.
+Rules about how agents behave live in prompts and agent definitions, not in code. Code checks protect only safety and
+invalid states: data loss, security, impossible states. Lint enforces only what the user explicitly asked for, and
+every lint message says why we don't want the pattern and what to do instead.
 
-A swallowed error needs a reason comment (`ultimate/no-silent-catch`). Code that exists because of something outside it
-names its origin (the issue or PR URL, our PR number, the `#conversation`), what breaks without it and when it can go.
+The code base is the example every agent copies, so it carries no exceptions to copy: fix the code rather than explain
+or excuse it. Code that exists only because of something outside it (an upstream bug, a provider quirk, an edge case
+found in the wild) gets its reason in its commit message and a regression test that fails without it.
+
+Each rule and what enforces it. A new check proves in its test that it fails on a real past mistake; a rule leaves the
+table once its mistake can no longer happen.
+
+| Rule                                                                     | Enforced by                                                         |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Time is never a stand-in for an event; timers only through named helpers | `ultimate/no-raw-timer`, `lib/timers.ts`                            |
+| Extensions meet only at contracts; the core tier runs without the rest   | `ultimate/api-only-imports`, `ultimate/core-tier-deps`, `pnpm deps` |
+| Contract files hold only documented contracts, named for their owner     | `ultimate/api-file-shape`, `ultimate/api-naming`                    |
+| Extension UI reaches the server only through the SDK                     | `ultimate/no-raw-stream`                                            |
+| No swallowed errors                                                      | `ultimate/no-silent-catch`                                          |
+| A call is replay-safe only when a rerun cannot do harm                   | `ultimate/replay-safe-by-name`, `lib/replay.ts`                     |
+| Fast tests are in-process, deterministic and keep the default timeout    | `ultimate/no-real-wait-in-fast-tests`, `ultimate/no-test-timeout`   |
+| One polling helper in tests                                              | `ultimate/no-local-test-polling`                                    |
+| A switch over a union names every case                                   | `typescript/switch-exhaustiveness-check`                            |
+| Pi couplings are listed and marked                                       | `scripts/pi-upstream.ts`                                            |
+| No dead code, shims, slop or tests that restate the implementation       | the review team (`reviewer-simplicity`)                             |
 
 Reject slop and jargon; no compatibility shims or speculative fallbacks: move forward and update callers. Commit a test
 for a feature's core path and one regression test per bug that happened, exercising behaviour and failure cases rather

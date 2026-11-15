@@ -1,14 +1,4 @@
-import { copyJson } from '@earendil-works/chord/json'
-import {
-  defineDoc,
-  defineEntry,
-  defineTask,
-  GenerationTask,
-  hook,
-  InboxDoc,
-  LiveDoc,
-  UsageDoc,
-} from '@earendil-works/pi-durable'
+import { offsetEntryId } from '../../lib/ids.ts'
 import type {
   ContextView,
   ConversationId,
@@ -19,6 +9,16 @@ import type {
   SubmissionRecord,
   TaskId,
   Tx,
+} from '@earendil-works/pi-durable'
+import { copyJson } from '@earendil-works/chord/json'
+import {
+  defineDoc,
+  defineTask,
+  GenerationTask,
+  hook,
+  InboxDoc,
+  LiveDoc,
+  UsageDoc,
 } from '@earendil-works/pi-durable'
 import type {
   AssistantMessage,
@@ -33,34 +33,15 @@ import { summaryModel } from './summary-model.ts'
 import { isInput } from '../../lib/entries.ts'
 import { classify } from '../../lib/model-error.ts'
 import type { SummaryModel, SummaryModelHost } from './summary-model.ts'
-import type {
-  FeatureChange,
-  IntentSummary,
-  ReplySummary,
-  SpawnSummary,
-  SummaryDiscard,
-  SummaryRecord,
-  SummaryStatus,
-  TitleChange,
-} from './types.ts'
-
-export const TitleChanged = defineEntry<TitleChange>('conversations.title-changed')
-
-export const FeatureChanged = defineEntry<FeatureChange>('conversations.feature-changed')
-
-export const IntentSummarized = defineEntry<IntentSummary>('conversations.intent-summarized')
-
-/** An accepted spawn or steer refresh; `byTaskId` is the summary task, whose input names the delegation or steer. */
-export const SpawnSummarized = defineEntry<SpawnSummary>('conversations.summarized')
-
-/**
- * An accepted reply summary; `byTaskId` is the summary task, whose input names the generation. Entries written before
- * the judgement was removed also carry `value`, which nothing reads.
- */
-export const ReplySummarized = defineEntry<ReplySummary>('conversations.assessed')
-
-/** A summary task result that was not accepted: superseded (`stale`) or failed (`error`). */
-export const SummaryDiscarded = defineEntry<SummaryDiscard>('conversations.summary-discarded')
+import type { SummaryRecord, SummaryStatus, SummaryDiscard } from './types.ts'
+import {
+  TitleChanged,
+  FeatureChanged,
+  IntentSummarized,
+  SpawnSummarized,
+  ReplySummarized,
+  SummaryDiscarded,
+} from './entries.ts'
 
 export type SummaryResult = {
   activity: string
@@ -156,12 +137,11 @@ const modelOf = (response?: ResponseReceipt, model?: SummaryModel) =>
       : {}
 
 function submissionsForAnswer(inputs: (SubmissionRecord | undefined)[], answer: EntryId) {
-  const completed = inputs.flatMap((input) =>
-    input?.type === 'input' && input.status === 'done' && input.answer === answer
-      ? [input.entry]
-      : [],
-  )
-  return completed.length ? (Math.max(...completed) as EntryId) : undefined
+  let newest: EntryId | undefined
+  for (const input of inputs)
+    if (input?.type === 'input' && input.status === 'done' && input.answer === answer)
+      if (newest === undefined || input.entry > newest) newest = input.entry
+  return newest
 }
 
 /** Add a summary model response's usage to the conversation's `pi.usage`, under its own model. */
@@ -414,7 +394,7 @@ export async function summaryHistory(tx: Tx, id: ConversationId, limit = 50) {
       if (entry.conversationId !== id) continue
       const data =
         IntentSummarized.is(entry) || SpawnSummarized.is(entry) || ReplySummarized.is(entry)
-          ? (entry.data as { summary?: string; at: number })
+          ? entry.data
           : undefined
       if (data?.summary) found.push({ summary: data.summary, at: data.at })
       if (found.length >= limit) break
@@ -433,7 +413,7 @@ export async function resetAfter(tx: Tx, id: ConversationId, entry: EntryId) {
   let cursor: Cursor | undefined
   do {
     const page = await tx.scanEntries(
-      { conversationId: id, minEntryId: (entry + 1) as EntryId },
+      { conversationId: id, minEntryId: offsetEntryId(entry, 1) },
       64,
       cursor,
     )
@@ -475,7 +455,7 @@ async function currentContext(tx: Tx, id: ConversationId, answer: EntryId) {
   let cursor: Cursor | undefined
   do {
     const page = await tx.scanEntries(
-      { conversationId: id, minEntryId: (answer + 1) as EntryId },
+      { conversationId: id, minEntryId: offsetEntryId(answer, 1) },
       64,
       cursor,
     )
@@ -662,7 +642,7 @@ export function summaryBehavior(host: SummaryHost, generate = generateSummary) {
           if (state.revision !== task.input.revision) return terminal
           // Counting and advancing this task are atomic: replay cannot count it twice,
           // and a slower older observer must not lose a distinct completed exchange.
-          state.lastAnswer = Math.max(state.lastAnswer ?? answer, answer) as EntryId
+          if (state.lastAnswer === undefined || answer > state.lastAnswer) state.lastAnswer = answer
           state.exchanges++
           // Top-level conversations refresh title and summary with every reply; subagents get activity only.
           const summary = !(await tx.conversation(runtime.conversationId))!.owner

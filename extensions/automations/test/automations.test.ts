@@ -90,6 +90,7 @@ async function fixture() {
   provided.set('subagents', {
     createChild: (tx, options) => createChild(host, tx, options),
   } satisfies Partial<SubagentsService>)
+  provided.set('messages', { owed: async () => undefined })
   const extension = automations(host as unknown as Parameters<typeof automations>[0])
   prepared.registry.install(extension)
   const route: FauxResponseFactory = (transcript) => {
@@ -183,7 +184,7 @@ it('fires every 2s into distinct answered conversations and supports pause, resu
   expect(await f.opened.harness.conversation(runs[0].conversationId!, context)).toBeDefined()
 })
 
-it("wakes a prompt automation's subscriber with the run conversation it started", async () => {
+it("wakes a prompt automation's subscriber with its run and serves the request only on the first fire", async () => {
   const f = await fixture()
   const target = await f.opened.harness.commit(async (tx) => {
     const child = await tx.createConversation({ ownership: { kind: 'ownerless' } })
@@ -196,6 +197,10 @@ it("wakes a prompt automation's subscriber with the run conversation it started"
     schedule: 'every 2s',
     subscribers: [target.id],
   })) as Automation
+  const serves = { message: 123, from: target.id }
+  await f.opened.harness.commit(async (tx) => {
+    ;(await tx.doc(Automations)).automations[a.id].serves = { ...serves, by: target.id }
+  }, context)
   const wakes = async () => {
     const conversation = (await f.opened.harness.conversation(target.id, context))!
     return (await conversation.context(context)).entries.filter(
@@ -207,12 +212,25 @@ it("wakes a prompt automation's subscriber with the run conversation it started"
     return !!wake && !!wake.model?.[0]?.content
   })
   await f.action('pause', { id: a.id })
-  const run = (await f.records())[0].runs[0]
+  const record = (await f.records())[0]
+  const run = record.runs[0]
   expect(run.conversationId).toBeTypeOf('number')
+  expect((await wakes())[0].data).toEqual({
+    id: a.id,
+    name: 'Digest',
+    text: '',
+    serves,
+    at: record.lastFireAt,
+  })
+  expect(record.lastFireAt).toBeGreaterThan(a.createdAt)
   const content = (await wakes())[0].model?.[0]?.content
   expect(content).toBe(
     `Automation ${a.id} "Digest" fired: \nIts prompt run is in conversation #${run.conversationId}: read that rather than doing the work again.`,
   )
+  await until(async () => (await f.records())[0].runs[0].status === 'done')
+  await f.action('run', { id: a.id })
+  await until(async () => (await wakes()).length === 2)
+  expect((await wakes())[1].data).toEqual({ id: a.id, name: 'Digest', text: '' })
 })
 
 it('names the run an overlapping fire skipped in the wake it delivers', async () => {

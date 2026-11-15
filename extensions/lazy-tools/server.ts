@@ -2,6 +2,7 @@ import { arr, obj } from '@earendil-works/pi-schema'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import type { ToolRegistration } from '@earendil-works/pi-durable'
 import { strEnum } from '../../lib/schema.ts'
+import { safeToRerun } from '../../lib/replay.ts'
 import { readSettings, userSettingsPath } from '../../lib/settings.ts'
 import type { ExtensionHost } from '../../server/extensions.ts'
 
@@ -47,8 +48,9 @@ export default async function lazyTools(host: Pick<ExtensionHost, 'userHome' | '
               'Pass their names here before calling them. Existing role permissions still apply. Call this tool directly, not from codemode.',
             parameters: obj({ names: arr(strEnum(names), { minItems: 1 }) }),
             callers: ['model'],
-            // Loading only records offered tool names; repeating it cannot execute the tools.
-            replay: 'safe',
+            ...safeToRerun(
+              'Loading only records offered tool names; repeating it cannot execute the tools.',
+            ),
             async execute({ names: requested }, api, context) {
               const agent = await api.agent(context)
               const selected = [...new Set(requested)]

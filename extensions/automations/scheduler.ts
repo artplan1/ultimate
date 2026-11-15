@@ -196,6 +196,7 @@ export function scheduler(
         text,
         a.runs.findLast((r) => r.status === 'running')?.conversationId,
       )
+    delete a.serves
     return run ?? { id: a.id }
   }
   const activeRuns = new WeakMap<Tx, Set<string>>()
@@ -229,7 +230,11 @@ export function scheduler(
       const id = await tx.createTask(
         RunTask,
         {
-          automation: { ...(JSON.parse(JSON.stringify(a)) as Automation), runs: [] },
+          automation: {
+            ...(JSON.parse(JSON.stringify(a)) as Automation),
+            lastFireAt: firedAt,
+            runs: [],
+          },
           firedAt,
           text,
         },

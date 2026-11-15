@@ -43,7 +43,7 @@ async function firstRun() {
     JSON.stringify({
       defaultSurface: 'workbench',
       custom: { keep: 1 },
-      extensions: { disable: ['automations'], extra: 'keep' },
+      extensions: { disable: ['plan'], extra: 'keep' },
     }),
   )
   const options = {
@@ -98,7 +98,7 @@ it.concurrent("keeps the project's extensions, agents and skills off and out of 
         extensions: ['x'],
         replaces: [],
         enable: [],
-        disable: ['automations'],
+        disable: ['plan'],
       },
     })
     expect(server.system.current().project).toMatchObject({
@@ -107,8 +107,8 @@ it.concurrent("keeps the project's extensions, agents and skills off and out of 
       settings: {},
     })
     expect(enabled('x')).toBe(false)
-    expect(enabled('automations')).toBe(true)
-    expect(await tools()).toContain('automation')
+    expect(enabled('plan')).toBe(true)
+    expect(await tools()).toContain('plan')
     expect(server.system.current().skills.some((skill) => skill.name === 'local-skill')).toBe(false)
     expect(
       (await action('extensions')).find((entry: { name: string }) => entry.name === 'x'),
@@ -148,8 +148,8 @@ it.concurrent('applies the local decision live, and remembers it across a restar
   try {
     await first.action('decide', { local: true })
     expect(first.enabled('x')).toBe(true)
-    expect(first.enabled('automations')).toBe(false)
-    expect(await first.tools()).not.toContain('automation')
+    expect(first.enabled('plan')).toBe(false)
+    expect(await first.tools()).not.toContain('plan')
     expect((await first.web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(true)
     expect(first.server.system.current().skills.some((skill) => skill.name === 'local-skill')).toBe(
       true,
@@ -162,8 +162,8 @@ it.concurrent('applies the local decision live, and remembers it across a restar
       expect(second.enabled('x')).toBe(true)
       await second.action('decide', { local: false })
       expect(second.enabled('x')).toBe(false)
-      expect(second.enabled('automations')).toBe(true)
-      expect(await second.tools()).toContain('automation')
+      expect(second.enabled('plan')).toBe(true)
+      expect(await second.tools()).toContain('plan')
       expect((await second.web()).some((path) => path.endsWith('/x/web.tsx'))).toBe(false)
       expect(
         second.server.system.current().skills.some((skill) => skill.name === 'local-skill'),
@@ -191,7 +191,7 @@ it.concurrent('writes project and user settings through onboarding, keeping keys
     expect(projectSettings).toMatchObject({
       custom: { keep: 1 },
       defaultSurface: 'workbench',
-      extensions: { extra: 'keep', enable: ['splash'], disable: ['automations'] },
+      extensions: { extra: 'keep', enable: ['splash'], disable: ['plan'] },
     })
     await Promise.all(
       ['info', 'documents'].map((name) =>
@@ -241,7 +241,7 @@ it.concurrent("adopts the project's setup only after a decision, and marks the f
     JSON.stringify({
       defaultSurface: 'workbench',
       custom: { keep: 1 },
-      extensions: { extra: 'keep', enable: ['splash'], disable: ['automations'] },
+      extensions: { extra: 'keep', enable: ['splash'], disable: ['plan'] },
     }),
   )
   await mkdir(join(home, '.ultimate'), { recursive: true })
@@ -258,10 +258,10 @@ it.concurrent("adopts the project's setup only after a decision, and marks the f
     await action('decide', { local: true })
     await action('adoptProjectSetup')
     await action('decide', { local: false })
-    expect(enabled('automations')).toBe(false)
+    expect(enabled('plan')).toBe(false)
     expect(JSON.parse(await readFile(userFile, 'utf8'))).toMatchObject({
       custom: 'user',
-      extensions: { extra: 2, enable: ['splash'], disable: ['sounds', 'automations'] },
+      extensions: { extra: 2, enable: ['splash'], disable: ['sounds', 'plan'] },
     })
     // `"onboarding": false` in the user's settings skips the first run without its marker.
     await updateSettings(userFile, (value) => {

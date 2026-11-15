@@ -63,7 +63,7 @@ import { imagesOf } from '../../lib/entries.ts'
 import { waitsForReply } from '../../lib/message-state.ts'
 import { callerOf } from './caller.ts'
 import { MessagesDoc } from './refs.ts'
-import { MessageEntry, ReplyEntry } from './refs.ts'
+import { MessageEntry, ReplyEntry } from '../entries/ui.tsx'
 import type { Message, Question, Remote } from './refs.ts'
 import { MessageAnswers } from './points.tsx'
 

@@ -12,7 +12,8 @@ under test and two on its parent rule out crashes and obvious breakage. They are
 
 - **Under test:** the committed head of the branch, as a full sha (`git rev-parse <sha>`). It must be reachable from
   `~/Projects/ultimate` (`git cat-file -t <sha>` there): worktree commits are.
-- **Baseline:** its parent on main. Earlier `recipe-v2` runs of the same baseline can count; name their run ids.
+- **Baseline:** its parent on main. Earlier runs of the same baseline count only when they ran on the same
+  scenario sha (the run's `scenario@<sha>` in `pnpm eval report`); otherwise run both sides fresh. Name the run ids.
 - A head that moves after the A/B (review fixes) keeps the A/B when the new commits do not touch what it exercised;
   say so in the report.
 
@@ -25,7 +26,9 @@ A coordinator sends @ultimate the two shas, a few lines on what changed, and wha
 const text = `Request from Ultimate's @ultimate (A/B before a core change lands). A/B on ~/Projects/ultimate:
 - Under test: <full sha> (<one line on the change>).
 - Baseline: <full sha> (main).
-- recipe-v2, default setup, --repeat 2 each.
+- recipe-v2, default setup, --repeat 2 each. For a change to automations or message routing, add (or use instead)
+  \`--scenario recipe-reminder\`: it creates a reminder automation, checks it fires and reaches the user, and scores
+  unanswered and duplicate board messages (about 3 min and $0.50 a run).
 Watch most closely: <paths the change touches>. I'll read runs/ myself; no reply needed when you start.`
 await ultimate.tell({ project: 'ultimate-eval', text, reply: false })
 await tools.automation({

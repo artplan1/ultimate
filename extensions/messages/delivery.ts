@@ -22,7 +22,7 @@ import type { Message } from './api.ts'
 import { imagesOf } from '../../lib/entries.ts'
 import { append, terminal } from './log.ts'
 import { remoteLabel, servesLine } from './addresses.ts'
-import { MessageEntry, ReplyEntry } from './refs.ts'
+import { MessageEntry, ReplyEntry } from '../entries/api.ts'
 
 // The answer and recipient identify delivery, not the request that happened to observe it.
 // Keep receipts outside the bounded message log so late observers and reopened tasks still find them.

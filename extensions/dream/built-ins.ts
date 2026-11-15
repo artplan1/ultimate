@@ -93,7 +93,6 @@ export const DREAM_ASK =
  * seed carried it: paused stays paused, and one deleted before the switch is not made again.
  */
 export async function ensureAutomation(host: ExtensionHost) {
-  if (!host.extensions().some((item) => item.name === 'automations' && item.enabled)) return
   // Every caller reads the chapter's own seed, so whichever runs first keeps its paused or deleted automation so.
   const seed = await readJson<Seed | undefined>(join(host.chapter.dir, 'seed.json'), undefined)
   for (const builtIn of BUILT_INS) await ensureOne(host, builtIn, seed)
@@ -143,7 +142,7 @@ export async function fired(host: ExtensionHost, tx: Tx, id: string, fire: numbe
     if ((await tx.doc(item.doc, ROOT_CONVERSATION_ID)).id === id) builtIn = item
   const ultimate = (await tx.doc(Standing, ROOT_CONVERSATION_ID)).ultimate
   if (!builtIn || ultimate === undefined) return
-  const automation = await host.want(AutomationsApi)?.read(tx, id)
+  const automation = await host.need(AutomationsApi).read(tx, id)
   const condition = automation?.condition
   const pause =
     builtIn.doc === PauseDoc && condition && automation

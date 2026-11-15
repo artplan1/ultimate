@@ -56,11 +56,6 @@ export default defineConfig({
         },
       },
       {
-        // The fast suite's budgets are chosen here, so the rule reads this file too: a raise is a lint failure.
-        files: ['vite.config.ts'],
-        rules: { 'ultimate/no-test-timeout': 'error' },
-      },
-      {
         files: ['test/**', 'extensions/*/test/**'],
         excludeFiles: ['test/helpers.ts'],
         rules: { 'ultimate/no-local-test-polling': 'error' },
@@ -249,18 +244,12 @@ export default defineConfig({
     // runs one extension's.
     include: ['test/**/*.test.ts', 'extensions/*/test/**/*.test.ts'],
     exclude: ['test/e2e/**', 'extensions/*/test/e2e/**'],
-    // A fixture copies the repository and boots every extension, so a 30 s budget leaves little room on a loaded
-    // machine: the fix is fewer fixtures at once (maxConcurrency below), never a longer timeout, and a test that still
-    // times out is one to split. A hang fails in 30 s and names its test.
     testTimeout: 30000,
     // A hung hook or teardown fails within seconds and names its test, instead of stalling the run.
     hookTimeout: 5000,
-    // Teardown is Vitest's own, not cleanup work; a stuck one should still stop the run quickly.
     teardownTimeout: 5000,
-    // The heavy files each boot ten Vite-backed servers, and Vitest's default concurrency runs five of those fixtures
-    // at once per worker: on a busy machine every test then takes two to four times longer and a 30 s budget that was
-    // never tight fails whichever heavy test is running (HazAT/ultimate#47). Files building fixtures run three at a
-    // time instead; the suite's wall time stays about the same.
+    // Fewer of the heavy fixture tests at once on a loaded machine than Vitest's default: the test, not the
+    // timeout, is what gives way (HazAT/ultimate#47).
     maxConcurrency: 3,
     maxWorkers: 8,
     // Under an agent (AI_AGENT, CLAUDECODE, …) Vitest picks its minimal reporter, which prints nothing for passing

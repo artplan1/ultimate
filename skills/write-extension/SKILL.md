@@ -1,6 +1,6 @@
 ---
 name: write-extension
-description: 'Build an extension or surface: a panel, renderer, command, tool or prompt section. Use before adding a new extension folder.'
+description: Build or change an Ultimate extension or surface (a panel, status-line item, tool or entry renderer, command, dialog, full-screen app, server tool or prompt section) in extensions/ or a project's .ultimate/extensions/. Use before writing a new extension folder or adding a contribution to one; not for small fixes inside an existing renderer.
 ---
 
 # Write an Ultimate extension
@@ -54,8 +54,7 @@ composer renderers), `commands.md`, `documents.md`, `surfaces.md`, `actions.md`,
 2. In the clone, `pnpm check` (format, lint, types, import boundaries, the dependency graph). For an extension of another
    project or a user extension, `node <clone>/scripts/check-extension.ts [folder…]` from the project (default: its
    `.ultimate/extensions/*`) type-checks it against the clone. Never copy an extension into the clone to check it: the
-   running host would load it. A successful clone check is not external-extension validation; do not add a harness,
-   dependency or check script without separate authorisation.
+   running host would load it.
 3. Tests for behaviour behind it: fast tests in the extension's own `test/` folder (`extensions/<name>/test/`), no
    real waits; run them alone with `pnpm test extensions/<name>/` (see "Tests" in `extensions/README.md`).
 4. Look at it: follow the `verify-ui` skill (a preview of your checkout for anything outside the running host).

@@ -1,91 +1,126 @@
 # Ultimate
 
-Ultimate is a local coding agent with a web UI, built on Pi Durable (`@earendil-works/pi-durable`), that runs this
-repository while it edits it. Below: how work is organised, and which change reloads how.
+Ultimate is a local coding agent with a web UI, built on Pi Durable (`@earendil-works/pi-durable`). It runs this
+repository while it edits it: you are probably reading this as Ultimate, about to change yourself. Everything below
+tells you which change reloads how, so the conversation you are in keeps running.
 
 ## How work is organised: a forest of conversation trees
 
-- **Roots** run no turns and keep a project memory (decisions, facts, lessons by slug); a branch starts from its memory
-  index and recent landings. Its read-only tally is the browsable project context, the **History** page, opened from
-  the sidebar's project path. One root per project: independent work goes into branches. Roots and standing agents are
-  never concluded or cleared, only compacted.
-- **Onboarding.** Start with @ultimate: it writes the first memories with `remember`, and the user's answer about the
-  project becomes instructions, kept verbatim as a memory. @ultimate maintains memory with `remember` and the memory
-  review; ⌘K Compact compacts a tally.
-- **A branch** is a feature, a fix, an experiment: @ultimate reads a root's tally and starts a coordinator branch from
-  its memory brief (or its tally), then the prompt. A branch is never a subagent.
-- **Branches ask the user through @ultimate**: a coordinator sends its decisions there, which weighs in, then asks
-  with a card; the answer comes back as a note.
-- **Across the tree**: codemode `ultimate.entries(id)`, `ultimate.search()`, `note`, `notify`; a resume brings a
-  catch-up of the tally, then new target commits, overlaps first.
-- **State divergence**: reports and `workspace submit` say how the result differs from the task; "None" when it matches.
-- **Conclude** a conversation when its work is done; it stays readable and resumable. A landing concludes its branch
-  unless work is under way (a subagent, a reply, queued input), and wakes whoever started it; a failed submission wakes
-  the branch.
-- **UI polish lands when the user says so**: small look-and-feel work runs preview rounds (`ui-preview-round`) and is
-  never submitted until the user approves it; larger UI features and anything with behaviour behind it land as usual.
-- **Hands-off goals**: ⌘K Go hands-off puts @ultimate on a goal while the user is away; it gives the go, decisions and
-  preview approvals in their place and records each with its reason (`extensions/goal/README.md`).
+A project is a forest of conversation trees, like commit histories.
 
-The mechanics are in [extensions/lineage/README.md](extensions/lineage/README.md).
+- **Roots** run no turns. Each keeps a project memory (decisions, facts, lessons by slug); a branch starts from the
+  root's memory index and recent landings. The root's read-only tally stays the browsable project context: branch
+  intents, latest conversation abstracts and landings with divergence and `#conversation/entry` breadcrumbs. The UI
+  calls a tally **context** and shows it as the read-only **History** page (the sidebar's project path opens it), with **Open in Zed** and **Back to
+  @ultimate**; the sidebar's Memory row shows the memory's estimated tokens (what a branch starts from) and opens the
+  Memory surface.
+  Start a project with @ultimate: Continue on Get ready, or **Set up with @ultimate** on the Start here card that
+  @ultimate's conversation shows until onboarding has run. It walks the user through Ultimate, handles setup
+  cards, reads the project and writes its first memories with `remember`; the user's answer about the project
+  becomes instructions, kept verbatim as a memory. The tally then builds up from branches and landings. @ultimate maintains memory with
+  `remember` and the memory review (`extensions/lineage/README.md`); the user can compact a tally with ⌘K
+  Compact while it is shown. A project has one root: independent work goes into branches.
+  Roots and standing agents are never concluded or cleared, only compacted.
+- **A branch** is a feature, a fix, an experiment. @ultimate picks a root by reading its tally, then starts a
+  coordinator branch that starts from its memory brief (or, without memories, its tally) before its prompt. A branch is never a subagent.
+- **Talk to @ultimate in its conversation.** The user's standing agent starts and steers branches there.
+  The first sidebar row (on phones, the top-bar **@ultimate** button) opens it; its messages and questions to you appear in that transcript.
+  Conversations and roots are not created by hand.
+- **Branches ask you in their own conversation.** A coordinator sends its decisions to @ultimate, which weighs in
+  (its picks, or deciding itself on a hands-off goal); the branch then asks you with a card there. @ultimate's
+  conversation shows a pointer to it, and your answer reaches @ultimate as a note.
+- **Coordinators carry the work.** A branch is the conversation; the coordinator is the agent that runs it, so the UI
+  labels it `branch · coordinator`. A branch plans, decides and verifies; subagents are for bounded execution and
+  reconnaissance, and the lander is the final gate on main.
+- **Zoom out when you need to.** Read any root or sibling with codemode `ultimate.entries(id)` and
+  `ultimate.search()`; commits name the conversation that made them (`Ultimate-Conversation` trailer).
+- **Talk across the tree without waking anyone.** `note` leaves context in another conversation for its next turn;
+  `notify` tells you when another conversation finishes. Resuming a branch brings a catch-up of its tree's tally
+  (older updates collapse when needed), then new target commits, overlaps first.
+- **State divergence.** Reports and `workspace submit` say how the result differs from the task as given: new
+  agreements, a different approach or changed scope. Say "None" when it matches.
+- **Conclude** a conversation when its work is done; it stays readable and can be resumed. A branch whose submission
+  lands is concluded by the landing, unless work is still under way (a subagent, a reply it waits for, queued input),
+  and whoever started it wakes with the landing card. A failed submission wakes the branch to fix it and submit again.
+- **UI polish lands when the user says so.** For small look-and-feel work (an animation, a loading state, spacing,
+  a card), run preview rounds (the `ui-preview-round` skill) and do not `workspace submit` until the user has clicked
+  around and approved it. Larger UI features and anything with behaviour behind it land as usual.
+- **Hands-off goals.** ⌘K Go hands-off… puts @ultimate on a goal while the user is away: it gives the go, decisions
+  and preview approvals in their place and records each with its reason (`extensions/goal/README.md`).
+
+`extensions/lineage/README.md` has the mechanics.
 
 ## Layers and how they reload
 
-- An extension is `extensions/<name>/`: `web.tsx` (its UI), `server.ts` (agent behaviour), `api.ts`/`refs.ts`/
-  `ui.tsx` (its contracts), a README. It reloads on save, without a restart ([what reloads
-  how](docs/running.md#what-reloads-how)).
-- `lib/`: pure helpers extensions share. `web/`: the web core. `agents/`: subagent definitions, reread at every start.
-  `server/`, `shared/`: core plumbing, `restart` only; `bin/`: the supervisor, keep it tiny and change it rarely.
-- Put behaviour in `extensions/`, not `server/`.
-- A surface is a full-screen app; a project's apps go in `<project>/.ultimate/extensions/`
-  ([surfaces](docs/extensions/surfaces.md)). New UI is a new extension folder, not a change to `web/`: follow
-  `write-extension` into [extensions/README.md](extensions/README.md) and copy the closest one.
+| Path                          | What lives there                                                                                                                                                                                      | How a change goes live                                                                                                                                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `extensions/<name>/web.tsx`   | UI of an extension: slots, panels, surfaces, tool and entry renderers, commands                                                                                                                       | Rebuilt into the page about 2 s after a save; open pages switch to the new bundle (drafts and view kept). A broken facet shows an error card; the rest keeps running.                                  |
+| `extensions/<name>/server.ts` | Agent behaviour: system prompt, tools, hooks (Pi Durable extensions)                                                                                                                                  | Reinstalled on save. Running tool calls finish on the old code; the next call uses the new code.                                                                                                       |
+| `extensions/<name>/api.ts`    | Its contract for other extensions; `export const tier = 'core'` puts it in the always-on core tier, which depends only on the core tier, one way ([the core tier docs](docs/extensions/core-tier.md)) | With the facets that import it.                                                                                                                                                                        |
+| `lib/`                        | Pure helpers extensions share (exec, git, JSON and settings files, secret reads); no state, no extension imports                                                                                      | Like the extensions that import it: rebuilt or reinstalled on save.                                                                                                                                    |
+| `web/`                        | The web core: surface host with primitives, SDK (`web/src/sdk`), transcript, composer, palette                                                                                                        | Rebuilt and switched to like a `web.tsx`. Nothing else to do.                                                                                                                                          |
+| `agents/`                     | Subagent definitions (Markdown with frontmatter)                                                                                                                                                      | Read at each use.                                                                                                                                                                                      |
+| `server/`, `shared/`          | Core plumbing: harness, storage, API, Vite hookup                                                                                                                                                     | Call the `restart` tool. A new process boots and type-checks next to the old one; if it fails you get the error and the old process keeps running. If it succeeds, the run resumes in the new process. |
+| `bin/`                        | The supervisor                                                                                                                                                                                        | Only a human restart (`pnpm start`) applies it. Keep it tiny and change it rarely.                                                                                                                     |
+
+Put behaviour in `extensions/` rather than `server/` whenever you can: it reloads without a restart. The browser runs a
+production bundle (`server/web.ts`): a change to `web/` or a `web.tsx` rebuilds it in a short-lived child process, and
+every open page reloads onto the new bundle, resuming the view and drafts it left; with no page open the next page load
+builds it.
+A surface is a full-screen app the user switches to (header, ⌘K, `mod+1…9`); the conversation itself is the built-in
+`agent` surface, and a project's apps go in `<project>/.ultimate/extensions/` (see [surfaces](docs/extensions/surfaces.md)).
+New UI is a new extension folder, not a change to `web/`: follow the `write-extension` skill, which points into
+[extensions/README.md](extensions/README.md), and copy the closest existing one (`status-line`, `coding-tools`).
 
 ## Developer reference — read when needed
 
-- [Running the server](docs/running.md): starting, debugging or testing a server or core swap.
-- [Worktrees](docs/worktrees.md): a preview in an isolate, landing, a rejected push.
-- [Settings](docs/settings.md): configuration, trust, resources, `summaryModel`.
-- [Durability](docs/durability.md): persistence, replay, durable UI state.
-- [Extension topics](extensions/README.md#topics): facets, contracts, documents, events, introspection.
-- [Subagents](docs/subagents.md): delegating, definitions, the review team.
-- [Pi](docs/pi-upstream.md): upgrades and upstream couplings, its [searching Pi's
-  code](docs/pi-upstream.md#searching-pis-code) first.
+- [Running the server](docs/running.md): before starting, debugging or testing a server or core swap.
+- [Worktrees and integration](docs/worktrees.md): before previewing an isolate, landing or recovering a rejected push.
+- [Discovery and settings](docs/settings.md): before changing configuration, trust, resources or `summaryModel` (titles, summaries, reply summaries and tree abstracts).
+- [Durability](docs/durability.md): before changing persistence, replay or durable UI state.
+- [Extension topics](extensions/README.md#topics): before wiring facets, contracts, documents, events or runtime inspection.
+- [Subagents](docs/subagents.md): before delegating, changing definitions or configuring the review team.
+- [Borrowed from Pi](docs/pi-upstream.md): on Pi upgrades or changes to upstream couplings; includes upstream references.
+- [Searching Pi's code](docs/pi-upstream.md#searching-pis-code): before reading Pi internals; where each package's types live and the `rg` command that finds them.
 
 ## Landing and pushing
 
 The top-level agent stops after changing repository files and running the checks that cover them: it names the changed
-paths, the checks and the risks, and asks the user to review the working tree. Committing, amending, landing, pushing
-and opening or changing a pull request wait for that approval, which covers exactly that handoff. `workspace submit`
-then merges, runs the source project's configured checks, fast-forwards the target branch and pushes it only when
-`lander.push` is set, which it is not here, so landings stay local and report "Not pushed." Subagents commit and report,
-never push. Never force-push, rewrite history or push secrets, and this covers no other repository's releases,
-publishing, deployments or GitHub issue/PR changes ([landing and pushing](docs/worktrees.md)).
+paths, the checks and the risks, and asks the user to review the working tree. Staging, committing, amending, landing,
+pushing, a restart or a core swap, and opening or changing a pull request wait for the user's approval of that exact
+action, target and environment; an earlier request to deliver is not that approval. Subagents commit and report, never
+push.
+
+`workspace submit` merges, runs the source project's configured checks, fast-forwards the target branch and pushes it
+only when `lander.push` is set. It is not set in this clone, so a landing stays local and reports "Not pushed.";
+publishing to the fork remote is a separate action the user approves. Never force-push, rewrite history or push secrets,
+and this covers no other repository's releases, publishing, deployments or GitHub issue/PR changes ([landing and
+pushing](docs/worktrees.md#landing-and-pushing)).
 
 ## Conventions
 
-- Discovery goes through the `grep` tool for file contents and the `find` tool for paths; `bash` is for git, builds, tests
-  and one-off shell work, not shell `rg`/`grep`/`find` lookups.
-- Keep local conversation/thread IDs out of new commit messages and GitHub PR titles, bodies and comments; provenance
-  stays in Ultimate's private events, not public Git metadata.
-- Pi is the role model: minimal, readable, malleable; prefer platform features and existing dependencies, and justify
-  every new dependency in its commit message.
-- Public docs, READMEs, prompts, agent definitions, skills and code comments use generic names and examples, never a
-  real person's name, machine names, private repos or real IPs; LICENSE, attributions and real repo URLs are exempt.
-- Plain TypeScript, ESM, Node 26, erasable syntax only (no enums, namespaces or parameter properties), relative imports
-  end in `.ts`.
-- Core contracts in `shared/protocol.ts`; extension types with their extension.
-- Pin `@earendil-works/*` to exact versions; Pi Durable is experimental.
-- Tests live with what they test: an extension's in `extensions/<name>/test/` with `test/web/` and `test/e2e/`, the
-  core's and cross-extension ones in the top-level `test/` with the shared helpers ([tests](docs/conventions.md#tests)).
-- `pnpm check` (format, lint, types; it fails on an import cycle or a core-tier extension depending on an optional one)
-  and the tests covering your change pass before a commit; the lander runs only `lander.checks` (here `pnpm check`), so
-  your branch owns its suites. No real waits or spawned processes in `pnpm test`; fix or delete a flaky test, never
-  skip it or give it a longer timeout; wait with `until` from `test/helpers.ts`, not a loop of your own. Tests may break
-  production rules when that makes them simpler and more robust; different rules apply to them.
-- Every user-visible result is designed, not dumped: status and outcomes get a card matching the existing ones, never
-  plain Markdown; write the expected look into the task and check screenshots against it
-  ([cards](docs/conventions.md#designed-not-dumped)).
+- Commits made through Ultimate's bash tool carry `Ultimate-Conversation: <id>`; find the conversation behind a commit with `git log --format=%(trailers:key=Ultimate-Conversation)`. Keep those local conversation and thread ids out of
+  public Git metadata: a commit message written for a public branch, and GitHub PR titles, bodies and comments.
+- Pi is the role model: minimal, readable, malleable. Prefer platform features and existing dependencies; justify every
+  new dependency in its commit message.
+- Public docs, READMEs, prompts, agent definitions, skills and code comments use generic names and examples ("the
+  user", `my-app`, example addresses), never a real person's name, machine names, private repos or real IPs. LICENSE,
+  upstream attributions and real repo URLs are exempt.
+- `pnpm check` enforces import boundaries; see `lint/ultimate.ts` and `vite.config.ts`. It also runs `pnpm deps`,
+  which prints the dependency graph between extensions (imports plus `need`/`want`) and fails on a cycle or on a
+  core-tier extension that depends on an optional one.
+- Plain TypeScript, ESM, Node 26 runs `.ts` directly: erasable syntax only (no enums, namespaces, or parameter
+  properties), relative imports end in `.ts`.
+- Core server/web contracts live in `shared/protocol.ts`; extension-local types live with their extension.
+- Pin `@earendil-works/*` packages to exact versions; Pi Durable is experimental.
+- Tests live with what they test: one extension's in `extensions/<name>/test/` (browser-side ones in `test/web/`, spawned-process ones in `test/e2e/` there), and the core's (`server/`, `shared/`, `lib/`, `web/`, scripts, lint) plus those that exercise several extensions together in the top-level `test/`, which also keeps the shared helpers and fixtures (`test/helpers.ts`). `pnpm test extensions/<name>/` runs one extension's fast tests, `pnpm test:e2e extensions/<name>/` its e2e tests; without a path each runs everything. An extension's `test/` folder is not part of the extension: saving a file there reloads nothing, and its imports are free of the extension import rules and stay out of `pnpm deps`.
+- Checks: `pnpm check` (format, lint, types) and the tests covering your change must pass before a commit; the lander
+  runs the checks the source project configures, which in this clone is `pnpm check` alone, so a branch owns its own
+  suites. Keep `pnpm test` fast: no real-time waits, no spawned processes (those go to a `test/e2e` folder), and fix or delete a flaky test rather than skipping it or raising its timeout. Lint enforces this with `ultimate/no-test-timeout` and `ultimate/no-real-wait-in-fast-tests` (`test/e2e` folders are exempt); justified exceptions need a `fast-test-reason:` comment. Use the real-deadline `until` from `test/helpers.ts` (`ultimate/no-local-test-polling`). Tests may break production rules when that makes them simpler and more robust: different rules apply to them.
+- Every user-visible result is designed, not dumped: status and outcomes (a subagent report, a landing, a failure) get a
+  renderer that matches the existing cards (see `extensions/subagents/messages.tsx`, `extensions/workspaces/log.tsx`),
+  never plain Markdown in a message. Look at the running app and recent screenshots first, write the expected look into
+  task descriptions, and check a worker's screenshots against it before accepting.
 
 ## Review quality
 
@@ -114,7 +149,8 @@ table once its mistake can no longer happen.
 | Pi couplings are listed and marked                                       | `scripts/pi-upstream.ts`                                            |
 | No dead code, shims, slop or tests that restate the implementation       | the review team (`reviewer-simplicity`)                             |
 
-Reject slop and jargon; no compatibility shims or speculative fallbacks: move forward and update callers. Commit a test
-for a feature's core path and one regression test per bug that happened, exercising behaviour and failure cases rather
-than restating the implementation; prove other edge cases once and show the command and its output; one-off migrations
-get no test.
+Reject slop and jargon: keep code and explanations direct, minimal, and grounded in evidence. No backward-compatibility
+shims or speculative fallbacks; move forward and update callers. Commit tests for a feature's core path and one
+regression test per bug that actually happened; they exercise behaviour and failure cases, never restate the
+implementation. Prove edge cases once instead (a throwaway test or script you run and delete, an action call, a
+preview check) and show the command and its output in the report; one-off migrations and retired shapes get no test.

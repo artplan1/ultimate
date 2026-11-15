@@ -1,6 +1,6 @@
 ---
 name: ui-preview-round
-description: Show a running preview and collect the user's approval before workspace submit. Use for UI polish or preview-first work.
+description: Run a preview round for UI work that lands only with the user's approval (polish, a new card, a panel, anything the task says to preview first). Use when a branch must show the user a running preview, collect approval, and only then workspace submit.
 ---
 
 # A preview round

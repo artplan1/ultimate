@@ -49,7 +49,7 @@ Paste this into Claude Code (or any agent) to get set up:
 Set up Ultimate (https://github.com/HazAT/ultimate) on this machine and get me to my first prompt.
 
 Read these first; they are the source of truth, so follow them and don't invent steps: README.md (sections
-"Start", "Models and families" and "In your project"), AGENTS.md ("How work is organised"), docs/running.md,
+"Start", "Recommended models" and "In your project"), AGENTS.md ("How work is organised"), docs/running.md,
 and extensions/claude-code/README.md.
 
 Then:
@@ -57,7 +57,7 @@ Then:
    what is missing and how to install it on my system; ask before installing anything system-wide.
 2. Clone the repository unless I'm already in it, run `pnpm install`, then `pnpm add -g "$PWD"` so I get the
    `ultimate` command; if pnpm's global bin is not on my PATH yet, `pnpm setup` adds it.
-3. Model login, per "Models and families": for Claude Code, install the CLI and let me run `claude auth login`
+3. Model login, per "Recommended models": for Claude Code, install the CLI and let me run `claude auth login`
    myself; otherwise I log in from Ultimate's command palette (Ctrl+K, ⌘K on macOS) → "Log in to a provider".
    Never read, copy or handle my credentials.
 4. Start it: give me the command to run in my own terminal, `pnpm start` for Ultimate on its own repository or
@@ -92,7 +92,7 @@ cd ~/Projects/app && ultimate  # or Ultimate on one of your projects
 - **First start** on a machine shows Get ready: log in to a provider and choose a model. Continue opens @ultimate,
   which offers inline setup cards, reads the project and writes the root's first context.
 - **Logins** happen inside the UI: Get ready, or later the command palette (`Ctrl+K`, `⌘K` on macOS) → "Log in to a
-  provider". Claude Code logs in with its own `claude auth login` (see "Models and families"). Logins are shared with
+  provider". Claude Code logs in with its own `claude auth login` (see "Recommended models"). Logins are shared with
   `pi`, and so is logging out; already logged in to `pi`, you skip this step. Log in on each machine; never copy
   `~/.pi/agent/auth.json` between machines, since a token refresh on one revokes the other's copy.
 - **A folder with its own `.ultimate/`** asks once: its setup or your global one. Its extensions, agents, and skills
@@ -111,21 +111,18 @@ line. For a fork or a customised copy, paste the page's [follow prompt](https://
 into @ultimate: once a day it checks for new entries, costing nothing on quiet days, and tells you what is worth
 bringing into your copy, changing nothing without your yes. See what's new, pull in what you want; nothing requires it.
 
-### Models and families
+### Recommended models
 
-Routing is by **model family** — a named model and thinking level — so changing a model is a family change, not a
-sweep through agent definitions. An ordinary definition names a family (`family: fast` in `agents/worker.md`) and
-takes its model and thinking from it, and a definition may still pin one model of its own. Per start: `branch` takes a
-`family` for that branch, `subagent start` takes a `model` and `thinking` for that child — it has no family of its own
-— while a named definition otherwise runs on the family its file names. Out of the box @ultimate and new branches run
-the `default` family, and Get ready's choice is that family's model with thinking high. Changing a family's model or
-thinking in the Agents panel (⌘K → **Model families…**) moves the agents started after it; a conversation already
-running keeps the model it started on. The Available definitions list and codemode `ultimate.agents()` show the
-family, model and thinking each one actually runs on. The model picker changes only the conversation it is opened in,
-and Get ready pre-selects the first of its recommended models you are logged in for. (This repository puts its
-coordinator on the `lead` family rather than `default`; that family's model comes from `.ultimate/settings.json`, and a
-person's own families for this project win over it.) To set Claude Code up, install the CLI (`npm install -g
-@anthropic-ai/claude-code`) and run `claude auth login`; ⌘K → **Claude Code setup…** shows the login status. The
+We recommend running @ultimate and the coordinators on Claude Code Opus 5.5 (`claude-code/claude-opus-5-5`); the
+other agents are your choice. Both run on the default family, and the model you choose on Get ready becomes that
+family's model with thinking high, so it is what @ultimate, new conversations and branches start on. Get ready
+pre-selects Opus 5.5 when Claude Code is logged in, otherwise `openai-codex/gpt-6-astra` with a ChatGPT login,
+otherwise the first model you are logged in for. Later, the model picker changes only the conversation it is opened
+in; the default family is changed in the Agents panel (⌘K → **Model families…**). (This repository puts its
+coordinator on the `lead` family, whose model and thinking are set in `.ultimate/settings.json` and shown by codemode
+`ultimate.agents()`.) To set Claude Code
+up, install the CLI (`npm install -g @anthropic-ai/claude-code`) and run `claude auth login`; ⌘K → **Claude Code
+setup…** shows the login status. The
 [Claude Code provider](extensions/claude-code/README.md) is experimental: it depends on Claude Code's protocol and
 account limits, and subscription coverage is not guaranteed.
 

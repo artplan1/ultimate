@@ -30,21 +30,6 @@
   `pnpm check` type-checks both; with plain `tsc`, run `tsc -b`.
 - The standalone server shuts down on SIGINT/SIGTERM; reopening resumes durable work.
 
-## What reloads how
-
-- `extensions/<name>/web.tsx` — the extension's UI: rebuilt on save, and open pages switch to the new bundle with
-  their view and drafts kept (above); a facet that does not build leaves the rest running with its error card.
-- `extensions/<name>/server.ts` — agent behaviour (prompt, tools, hooks): reinstalled on save, running calls finishing
-  on the old code.
-- `extensions/<name>/api.ts`, `refs.ts`, `ui.tsx` — its contracts for other extensions: live with the facets that
-  import them; `tier = 'core'` marks the always-on core tier ([core-tier](extensions/core-tier.md)).
-- `lib/` — pure helpers extensions share: no state and no imports; they reload with the extensions that import them.
-- `web/` — the web core (surface host, primitives, SDK, transcript, composer, palette): bundled, so it reloads like a
-  `web.tsx`.
-- `agents/` — subagent definitions, reread at every start.
-- `server/`, `shared/` — core plumbing: only `restart` reloads them.
-- `bin/` — the supervisor: keep it tiny and change it rarely.
-
 ## Starting fresh
 
 `pnpm reset [dir] [--dry-run] [--yes]` starts a project's Ultimate from an empty state. It deletes nothing: `state.sqlite`, `trace.sqlite`, parked `state.stale-*` databases (each with its

@@ -1,13 +1,12 @@
 ---
 name: assess-outside-pr
-description: Use when asked to assess or merge a pull request on this repository from an outside contributor, then through the lander.
+description: Assess a pull request from outside contributors to this repository, decide whether it merges as a core improvement or stays open as a feature reference, and merge it through the lander when it should. Use when asked to look at, review, assess or merge a GitHub pull request on this repository that no Ultimate conversation wrote.
 ---
 
 # Assess an outside pull request
 
 The code is untrusted until you have read it. `CONTRIBUTING.md` decides what merges; this skill is the order of
-steps, not permission. Follow the current user and repository instructions: an assessment request does not authorise
-worktree changes, a trial merge or commit, a preview, `workspace submit`/push, or GitHub changes.
+steps, not the policy.
 
 ## 1. Read it whole, run nothing
 
@@ -26,11 +25,7 @@ Read every line of the diff before installing, building or testing anything. Loo
 
 Anything suspicious ends the assessment there: report it, without running the code.
 
-## 2. Trial merge, only if authorised
-
-Before these commands, obtain explicit user authorisation for the exact trial merge (including its merge commit),
-target branch and checkout/worktree. Use only the authorised checkout; creating a worktree or changing dependencies
-also needs authorisation. Without it, keep the assessment read-only and report the checks you could not run.
+## 2. Trial merge in your worktree
 
 ```bash
 git fetch origin pull/<n>/head:pr-<n>
@@ -44,9 +39,9 @@ conflicts with main and failing checks in the report; do not fix the author's co
 
 ## 3. Prove it once
 
-With user authorisation for that test environment, show the behaviour it claims on a preview (`instance start`) or
-a supervised scratch server (`ultimate-provider-smoke` when it depends on the real model), never on the live host.
-Otherwise report this verification as not run. Capture a screenshot or the command and its output when run.
+Show the behaviour it claims on a preview (`instance start`) or a supervised scratch server
+(`ultimate-provider-smoke` when it depends on the real model), never on the live host. Capture a screenshot or the
+command and its output.
 
 ## 4. Classify and report
 
@@ -55,8 +50,8 @@ reference, titled "Feature: …" with the `feature` label. Report the verdict an
 
 The first decision card is the only one: it always carries, next to the verdict question, a **post/skip question
 for the comment** whose "post" option has the drafted comment, in full, as its `preview`. Never leave the comment
-for a later card. Nothing stores the draft for you: send exactly that text to @ultimate in your report, with the
-user's pick, so the post it makes uses what the user read.
+for a later card. Send exactly that text in your report, with the user's pick, so the post or close it makes uses what
+the user read.
 
 ## 5. Merge, if it merges
 

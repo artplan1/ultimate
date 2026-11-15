@@ -29,9 +29,10 @@ For `server/`, `shared/`, `patches/` or `pnpm-lock.yaml` changes, an authorized 
 The top-level agent changes files and runs the checks covering them, then stops and hands the working tree over: the
 user's approval of that handoff is what lets it commit and `workspace submit`. It may then push the destination branch
 (normally `main`) to this repository's GitHub remote, `origin` (`HazAT/ultimate`), public or private; other repositories
-stay out of it. `workspace submit` goes as far as the account allows: the lander pushes after its checks only when
-`lander.push` is set, and `lander.push` is unset here because the account has pull-only access to `origin`, so landings
-stay local and report "Not pushed." Subagents commit and report; only the top-level agent submits.
+stay out of it. `workspace submit` goes as far as the lander is configured: it pushes after its checks only when
+`lander.push` is set, and it is unset in this clone, so a landing stays local and reports "Not pushed." Publishing a
+branch to a remote is a separate action the user approves. Subagents commit and report; only the top-level agent
+submits.
 
 Use normal, non-force pushes only. Remote advancement or a non-fast-forward rejection is normal: fetch, inspect the
 incoming log and diff, and merge non-destructively in an isolated workspace, preserving both histories. Rerun checks,

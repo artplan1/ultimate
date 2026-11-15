@@ -1,6 +1,6 @@
 ---
 name: integrate-ultimate
-description: Investigate a project, then build its extensions and agents into .ultimate/. Use when asked to set Ultimate up or what to add.
+description: Integrate Ultimate into an existing project. First investigate the project and how its people work on it, then suggest a small set of project-specific extensions, surfaces, agents and settings, and build the chosen ones into <project>/.ultimate/. Use when someone wants to "use Ultimate in this project", "set up Ultimate here", asks what Ultimate could do for a repository, or wants a review team or a lander (checks and push on landing) set up for a project.
 ---
 
 # Integrate Ultimate into a project

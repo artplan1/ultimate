@@ -222,6 +222,21 @@ export function delivery(host: ExtensionHost) {
               ? `ended its turn without an answer (${settled.status === 'unanswered' ? settled.reason : settled.status})`
               : undefined
           const state = stopped ? 'stopped' : failed ? 'failed' : undefined
+          // One answer to several of the sender's messages goes back once: the others it answers just close. Another
+          // Ultimate's requests each wait on their own key, so they each get it.
+          if (
+            !failed &&
+            !m.remote &&
+            (await tx.doc(Messages, ROOT_CONVERSATION_ID)).messages.some(
+              (r) => r.answer === answer && r.from === m.to && r.to === m.from,
+            )
+          ) {
+            if (original) {
+              original.state = 'answered'
+              original.answer = answer
+            }
+            return terminal
+          }
           if (original) {
             original.state = state ?? 'answered'
             if (answer !== undefined) original.answer = answer
@@ -230,9 +245,10 @@ export function delivery(host: ExtensionHost) {
           }
           // Each submission settles above, but a run may settle several with the same assistant entry.
           // Remote requests have separate return addresses (keys), even when their local sender is 'remote'.
+          // Only a successful answer is one receipt: a failed one answers each request, as upstream does.
           const key = JSON.stringify([answer, m.from, m.remote ?? null])
           const answers = await tx.doc(Answers, recipient.id)
-          if (answer !== undefined && answers.ids[key] !== undefined) return terminal
+          if (!failed && answer !== undefined && answers.ids[key] !== undefined) return terminal
           const response = await append(tx, {
             from: m.to,
             to: m.from,
@@ -244,7 +260,7 @@ export function delivery(host: ExtensionHost) {
             ...(error ? { error } : {}),
             ...(m.remote ? { remote: m.remote } : {}),
           })
-          if (answer !== undefined) answers.ids[key] = response.id
+          if (!failed && answer !== undefined) answers.ids[key] = response.id
           const line = await servesLine(tx, response.from, response.to)
           return {
             status: 'running',

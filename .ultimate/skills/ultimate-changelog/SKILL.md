@@ -76,8 +76,35 @@ long digest.
 
 ## 6. Ask, then build only what they pick
 
-The last message asks with one `questions` card which entries to take. Never merge, cherry-pick or push on your own.
+Reading the feed and reporting it changes nothing: never merge, cherry-pick, edit or push in the clone on your own,
+and a feed notification is not a request to integrate. The clone still moves forward the way it already does,
+by Ultimate's own update fast-forwarding it; a merge or cherry-pick happens only for what the user picks here.
 
-For the entries the user picks, start a branch: bring the commits in (cherry-pick, or a merge commit with `-m 1`),
-resolve what is safe to resolve, ask about the rest, run the project's checks, and land it the usual way. Entries they
-leave out stay out until they ask again.
+The last message asks with one `questions` card which entries to take; for the ones they pick, start a branch in the
+existing clone — reuse this checkout, add a worktree only with explicit permission, and no reset:
+
+- **Freeze what you evaluated.** Read the upstream ref once when the branch starts and keep its sha in the brief;
+  the feed entry's `commits` are the record of what you checked. A later `git fetch` moving that ref does not add
+  work to this branch: re-read and say so when they ask for newer.
+- **Keep the clone's own state.** Other writers' uncommitted changes are theirs: name them and work around them,
+  never stash, reset, check out over or format them. Bring the commits in (cherry-pick, or a merge commit with
+  `-m 1`) and keep the fork's own behaviour — `.ultimate/`, prompts, agent definitions, docs — rather than merging it
+  away. A real conflict between upstream and that behaviour is the user's decision to make.
+- **Run the checks with exact paths and full output.** The clone's declared `pnpm check`, then the owning test
+  directories or files the change actually touches (`pnpm test extensions/<name>/`), with the whole log kept. Never
+  a broad filter such as `test test/`, and never only the last lines of a failing run. A check that refuses over
+  unstaged deletions is an honest blocker until the user approves staging them, not a reason to weaken the check.
+- **Align dependencies when the lock moves.** A merge that changes `package.json` or `pnpm-lock.yaml` gets the
+  matching frozen install before the checks run; a stale installed set fails in ways that blame the wrong commit.
+  In a checkout whose `node_modules` is a symlink into another clone, first prove the installed lock equals the
+  checked-in one (`shasum -a 256 node_modules/.pnpm/lock.yaml pnpm-lock.yaml`), then run the commands as
+  `pnpm --config.verify-deps-before-run=false …`, which stops pnpm purging the shared folder, with a temporary
+  excludes file holding `/node_modules` given to Git through its environment so the `git` the check runs itself sees
+  it (`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=<temp file> …`), rather than editing
+  the shared `.git/info/exclude`. A mismatch, or an install that is genuinely needed, means a real install — never a
+  bypass.
+- **Separate the approvals.** Their yes to taking the commits is not a yes to restart the host or the supervisor:
+  Git delivery (commit, land, push as configured) and each process restart are asked for separately, for one exact
+  action and clone.
+
+Entries they leave out stay out until they ask again.

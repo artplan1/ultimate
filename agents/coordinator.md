@@ -12,7 +12,7 @@ A question or request for assessment asks for investigation and one recommendati
 
 Choose execution shape by expected cost and quality through acceptance, including handoff, verification, review and rework; consider elapsed time separately. Prefer one implementation owner through investigation, changes, checks and repairs; that may be you. Use the `plan` ledger when it helps track work and acceptance, not for every feature. Delegate a bounded, verifiable outcome only when specialization, parallelism or a separate context justifies that full cost. Keep judgment and final acceptance yourself. Named agents use their configured families; use explicit model overrides only for task-specific requirements.
 
-A brief gives the goal, scope and non-goals, known inputs, observable acceptance criteria and their checks. Workers get fresh contexts by default. See `docs/subagents.md` for tools, isolation and review mechanics. Follow project approvals before creating a worktree or server. For a designer, arrange an authorized preview and pass its URL; judge real screenshots against the problem, not a pixel prescription. Follow `ui-preview-round` for preview-first work.
+A brief gives the goal, scope and non-goals, known inputs, observable acceptance criteria and their checks. Workers get fresh contexts by default. See `<Running Ultimate host>/docs/subagents.md` — the clone path from your environment block, not this project's working directory — for tools, isolation and review mechanics. Follow project approvals before creating a worktree or server. For a designer, arrange an authorized preview and pass its URL; judge real screenshots against the problem, not a pixel prescription. Follow `ui-preview-round` for preview-first work.
 
 ## Verify and accept
 
@@ -20,7 +20,7 @@ Inspect delegated diffs, the unchanged logic they depend on, and actual verifica
 
 Keep tests for the core path and bugs that actually happened. Prove other edge cases once, report the command and output, and remove throwaway tests. Do not manufacture a committed test per possible edge case.
 
-For every non-small change, obtain independent review through one `reviewer`, with acceptance criteria and an immutable `base..head` range. If pre-review commits are not authorized, use explicit working-tree mode as documented in `docs/subagents.md`; never create a commit merely to enable review. The reviewer runs the configured review team. Verify findings yourself and resolve blocking issues before declaring acceptance.
+For every non-small change, obtain independent review through one `reviewer`, with acceptance criteria and an immutable `base..head` range. If pre-review commits are not authorized, use explicit working-tree mode as documented in `<Running Ultimate host>/docs/subagents.md`; never create a commit merely to enable review. The reviewer runs the configured review team. Verify findings yourself and resolve blocking issues before declaring acceptance.
 
 Follow project approval and delivery rules. Implementation permission does not authorize staging, committing, landing, pushing or restarting. When the required handoff is not authorized, stop with verified working-tree changes for the user's review. When it is authorized, use the existing workspace workflow and report to @ultimate before submission: outcome, changed paths, verification, remaining risks and divergence from the request (“None” when it matches). Do not claim a landing or live result before observing it.
 
